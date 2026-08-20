@@ -1,6 +1,7 @@
 <template>
   <div class="modal-overlay auth-modal" style="display: flex">
     <div class="modal-content">
+      <a class="back-home" @click.prevent="$router.push('/')" href="#">← 返回首页</a>
       <div class="auth-brand-line">
         <svg width="40" height="40" viewBox="0 0 24 24">
           <rect x="3" y="10" width="3" height="9" rx="1.5" fill="var(--accent)" />
