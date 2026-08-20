@@ -1,0 +1,119 @@
+/* ============================================================
+   Music Dreamer 设计令牌 + Element Plus 深色主题接管
+   设计语言：夜幕蓝灰底 + 原主题粉强调；圆角 4/6/8/10；等宽数字
+   ============================================================ */
+
+:root,
+html.dark {
+  /* 色彩令牌 */
+  --bg: #0e1014;
+  --surface: #16181f;
+  --surface-2: #1d2029;
+  --surface-hover: #242836;
+  --text: #e6e8ee;
+  --text-muted: #8b91a3;
+  --text-faint: #5d6373;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --accent: #f27ba7;
+  --accent-hover: #f892b8;
+  --accent-soft: rgba(242, 123, 167, 0.14);
+  --accent-text: #2b1017;
+
+  --success: #4cc38a;
+  --error: #e5534b;
+  --warning: #d4a72c;
+  --info: #4c8dff;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  --font-body: 'HarmonyOS Sans SC', 'MiSans', 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+
+  /* ---- Element Plus 深色变量覆盖 ---- */
+  --el-color-primary: var(--accent);
+  --el-color-primary-dark-2: #d95d8c;
+  --el-color-primary-light-3: #c0648b;
+  --el-color-primary-light-5: #7c4a5e;
+  --el-color-primary-light-7: #4f3140;
+  --el-color-primary-light-8: #3d2833;
+  --el-color-primary-light-9: #2c1f26;
+
+  --el-color-success: var(--success);
+  --el-color-danger: var(--error);
+  --el-color-error: var(--error);
+  --el-color-warning: var(--warning);
+  --el-color-info: var(--info);
+
+  --el-bg-color: var(--surface);
+  --el-bg-color-overlay: var(--surface-2);
+  --el-bg-color-page: var(--bg);
+
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: #b9bfcc;
+  --el-text-color-secondary: var(--text-muted);
+  --el-text-color-placeholder: var(--text-faint);
+  --el-text-color-disabled: #454b59;
+
+  --el-border-color: rgba(255, 255, 255, 0.09);
+  --el-border-color-light: rgba(255, 255, 255, 0.07);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.05);
+  --el-border-color-extra-light: rgba(255, 255, 255, 0.04);
+  --el-border-color-dark: rgba(255, 255, 255, 0.14);
+
+  --el-fill-color: var(--surface-2);
+  --el-fill-color-light: var(--surface-2);
+  --el-fill-color-lighter: rgba(255, 255, 255, 0.04);
+  --el-fill-color-blank: var(--surface);
+  --el-fill-color-dark: var(--surface-hover);
+  --el-fill-color-darker: #2a2f3d;
+
+  --el-mask-color: rgba(6, 7, 10, 0.62);
+
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 999px;
+
+  --el-font-family: var(--font-body);
+
+  --el-box-shadow: var(--shadow-md);
+  --el-box-shadow-light: var(--shadow-sm);
+}
+
+/* EP 组件细节修正 */
+html.dark .el-button--primary {
+  --el-button-text-color: var(--accent-text);
+  --el-button-hover-text-color: var(--accent-text);
+}
+
+html.dark .el-table {
+  --el-table-border-color: var(--border);
+  --el-table-header-bg-color: var(--surface-2);
+  --el-table-tr-bg-color: var(--surface);
+  --el-table-row-hover-bg-color: var(--surface-hover);
+  background-color: transparent;
+}
+
+html.dark .el-card {
+  --el-card-bg-color: var(--surface);
+  border-color: var(--border);
+}
+
+html.dark .el-dialog,
+html.dark .el-message-box {
+  background-color: var(--surface-2);
+}
+
+/* 工具类 */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
