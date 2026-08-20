@@ -1,0 +1,26 @@
+package com.musicdreamer.music.mapper;
+
+import com.musicdreamer.music.vo.SingerVO;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+/** 用户表只读 Mapper（join 用，歌手搜索）。 */
+public interface UserMapper {
+
+    String SINGER_COLS = "u.id, COALESCE(u.nickname, u.username) AS nickname, u.avatar, sp.fans_count AS fansCount";
+
+    /** 歌手搜索：role >= 1 且用户名/昵称匹配。 */
+    @Select("<script>SELECT " + SINGER_COLS + " FROM user u LEFT JOIN singer_profile sp ON sp.user_id = u.id "
+            + "WHERE u.role >= 1 AND u.status = 1 "
+            + "<if test='kw != null and kw != \"\"'> AND (u.username LIKE CONCAT('%', #{kw}, '%') "
+            + "OR u.nickname LIKE CONCAT('%', #{kw}, '%'))</if> "
+            + "ORDER BY u.id DESC LIMIT #{offset}, #{size}</script>")
+    List<SingerVO> searchSingers(@Param("kw") String kw, @Param("offset") long offset, @Param("size") int size);
+
+    @Select("<script>SELECT COUNT(*) FROM user u WHERE u.role >= 1 AND u.status = 1 "
+            + "<if test='kw != null and kw != \"\"'> AND (u.username LIKE CONCAT('%', #{kw}, '%') "
+            + "OR u.nickname LIKE CONCAT('%', #{kw}, '%'))</if></script>")
+    long countSingers(@Param("kw") String kw);
+}

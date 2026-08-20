@@ -1,0 +1,27 @@
+# 构建产物
+*/target/
+
+# 本地媒体工具与模型（fetch-tools.js 拉取，清单在 tools.manifest.json）
+tools/apache-maven-*/
+tools/m2-repo/
+tools/mvn.sh
+tools/*.zip
+tools/yt-dlp*
+tools/ffmpeg/
+tools/whisper/
+tools/models/
+tools/settings.xml
+
+# 运行期数据
+backend/*/data/
+data/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db

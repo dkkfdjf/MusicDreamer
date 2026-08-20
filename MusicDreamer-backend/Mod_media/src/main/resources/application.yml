@@ -1,0 +1,50 @@
+server:
+  port: 8010
+
+spring:
+  application:
+    name: mediaService8010
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/music?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        enabled: ${NACOS_ENABLED:true}
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 520MB
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+media:
+  storage-root: ${STORAGE_ROOT:./data}
+  tools-path: ${TOOLS_PATH:}
+  volume-target-lufs: -16
+  download-concurrency: 1
+  transcribe-concurrency: 2
+  sentinel:
+    transport:
+      dashboard: ${SENTINEL_DASH:localhost:8858}
+      port: 8719
+
