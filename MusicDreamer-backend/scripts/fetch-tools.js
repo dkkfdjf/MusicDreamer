@@ -26,9 +26,11 @@ async function download(url, destFile, minBytes) {
   const partFile = destFile + ".part";
   let attempt = 0;
   const urls = [url];
-  // ghproxy 镜像兜底（仅 github 直链）
+  // github 直链失败时依次切换代理镜像
   if (url.includes("github.com") && !url.includes("ghproxy")) {
-    urls.push("https://ghproxy.com/" + url);
+    for (const p of ["https://ghproxy.net/", "https://gh-proxy.com/", "https://ghproxy.com/"]) {
+      urls.push(p + url);
+    }
   }
   for (const u of urls) {
     attempt++;
