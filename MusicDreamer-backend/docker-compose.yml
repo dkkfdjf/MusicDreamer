@@ -44,8 +44,8 @@ services:
   # ---------- 业务服务（统一模板镜像，环境变量区分模块） ----------
   gateway:
     build: { context: ., dockerfile: Dockerfile.service }
-    environment: { SVC: gateway, PORT: 80 }
-    ports: ["80:80"]
+    environment: { SVC: gateway, PORT: 8080 }
+    ports: ["8080:8080"]
     depends_on: [nacos]
     restart: always
 

@@ -8,7 +8,7 @@
 MusicDreamer/                 # 工作区（设计文档与项目管理文件放这里）
 ├── backend/                  # 后端仓库（可独立 git init）
 │   ├── common/               # 公共库：统一响应 Mess / 错误码 / JWT / 用户上下文
-│   ├── gateway/              # API 网关 :80（路由 / 统一鉴权 / 限流 / 静态 /data 转发）
+│   ├── gateway/              # API 网关 :8080（路由 / 统一鉴权 / 限流 / 静态 /data 转发）
 │   ├── Mod_login/            # 认证与用户 :8001
 │   ├── Mod_music/            # 歌曲·审核·搜索·统计·协同过滤推荐 :8002
 │   ├── Mod_upload/           # 文件上传校验 + /data 静态资源 :8007
@@ -70,7 +70,7 @@ java -jar Mod_media/target/mod-media-1.0.0.jar
 # frontend 为独立仓库，可直接 git init
 cd ../frontend
 npm install
-npm run dev        # http://localhost:5173（代理 /api 与 /data 到网关 :80）
+npm run dev        # http://localhost:5173（代理 /api 与 /data 到网关 :8080）
 ```
 
 ### 5. 监控（可选）
