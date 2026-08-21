@@ -46,20 +46,41 @@ public class ToolsController {
             Map.of("key", "small", "label", "高精度", "sizeText", "约466MB"),
             Map.of("key", "medium", "label", "最高精度（很慢）", "sizeText", "约1.5GB"));
 
+    /** 探测缓存：起 4 个进程 + 访问 GitHub 太重，结果缓存 5 分钟让管理后台秒开。 */
+    private volatile List<Map<String, Object>> statusCache;
+    private volatile long statusCacheAt;
+    private volatile String latestCache;
+    private volatile long latestCacheAt;
+
     @GetMapping("/tools/status")
     public Mess toolsStatus() {
         AuthContext.requireAdmin();
+        long now = System.currentTimeMillis();
+        if (statusCache != null && now - statusCacheAt < 300_000) {
+            return Mess.ok(statusCache);
+        }
         List<Map<String, Object>> list = new ArrayList<>();
-        for (String tool : List.of(ToolsLocator.YT_DLP, ToolsLocator.FFMPEG, ToolsLocator.WHISPER)) {
+        for (String tool : List.of(ToolsLocator.YT_DLP, ToolsLocator.FFMPEG,
+                ToolsLocator.FFPROBE, ToolsLocator.WHISPER)) {
             String path = tools.locate(tool);
+            String version = null;
+            if (path != null) {
+                version = tools.execVersion(path, tools.probeArgs(tool));
+                // whisper-cli 的 --help 首行是 usage:，构建无版本号时给友好文案
+                if (version != null && (version.startsWith("usage:") || version.startsWith("error:"))) {
+                    version = "已安装（该构建无版本号）";
+                }
+            }
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("name", tool);
             item.put("path", path);
-            item.put("version", path == null ? null : tools.execVersion(path));
-            item.put("alive", path != null && tools.execVersion(path) != null);
+            item.put("version", version);
+            item.put("alive", version != null);
             item.put("latest", tool.equals(ToolsLocator.YT_DLP) ? githubLatest() : null);
             list.add(item);
         }
+        statusCache = list;
+        statusCacheAt = now;
         return Mess.ok(list);
     }
 
@@ -80,8 +101,10 @@ public class ToolsController {
         for (Map<String, String> m : MODELS) {
             String key = m.get("key");
             Map<String, Object> item = new LinkedHashMap<>(m);
-            item.put("downloaded", Files.isRegularFile(dir.resolve("ggml-" + key + ".bin")));
-            item.put("isCurrent", key.equals(current));
+            // 使用中 = 当前选中且文件真实存在，避免"使用中却带下载按钮"的矛盾态
+            boolean downloaded = Files.isRegularFile(dir.resolve("ggml-" + key + ".bin"));
+            item.put("downloaded", downloaded);
+            item.put("isCurrent", key.equals(current) && downloaded);
             list.add(item);
         }
         return Mess.ok(list);
@@ -101,6 +124,12 @@ public class ToolsController {
     @PostMapping("/models/{key}/use")
     public Mess modelUse(@PathVariable String key) {
         AuthContext.requireAdmin();
+        if (MODELS.stream().noneMatch(m -> m.get("key").equals(key))) {
+            return Mess.fail(5003, "未知模型规格");
+        }
+        if (!Files.isRegularFile(storage.modelsDir().resolve("ggml-" + key + ".bin"))) {
+            return Mess.fail(5003, "模型尚未下载，请先下载再切换");
+        }
         try {
             Path marker = storage.modelsDir().resolve("current.txt");
             Files.writeString(marker, key);
@@ -124,25 +153,33 @@ public class ToolsController {
         return Mess.ok();
     }
 
-    /** GitHub 最新版比对（yt-dlp 版本号即日期）。 */
+    /** GitHub 最新版比对（yt-dlp 版本号即日期）。成功缓存 1 小时；国内访问常超时，失败 10 分钟内不重试。 */
     private String githubLatest() {
+        long now = System.currentTimeMillis();
+        if (latestCacheAt > 0
+                && now - latestCacheAt < (latestCache == null ? 600_000 : 3_600_000)) {
+            return latestCache;
+        }
         try {
             HttpRequest req = HttpRequest.newBuilder(
                             URI.create("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"))
                     .header(HttpHeaders.USER_AGENT, "MusicDreamer-Updater")
                     .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
-                    .timeout(Duration.ofSeconds(10)).build();
+                    .timeout(Duration.ofSeconds(3)).build();
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body();
             int i = body.indexOf("\"tag_name\"");
             if (i >= 0) {
                 int s = body.indexOf('"', i + 11) + 1;
                 int e = body.indexOf('"', s);
-                return body.substring(s, e);
+                latestCache = body.substring(s, e);
+                latestCacheAt = now;
+                return latestCache;
             }
         } catch (Exception e) {
             log.warn("github latest check failed: {}", e.getMessage());
         }
-        return null;
+        latestCacheAt = now;
+        return latestCache;
     }
 }

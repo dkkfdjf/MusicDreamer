@@ -36,14 +36,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/user/password/reset",
             "/api/v1/search/**", "/api/v1/song/play/**", "/api/v1/song/detail/**",
             "/api/v1/announcement/**", "/api/v1/song/chart/**",
+            "/api/v1/comment/list/**", "/api/v1/recommend/list",
             "/data/**",
     };
 
     /** 需要 role=2（管理员）。 */
     private static final String[] ADMIN_PATHS = {
             "/api/v1/user/list*", "/api/v1/user/status", "/api/v1/user/singer/audit",
-            "/api/v1/song/audit", "/api/v1/song/takedown", "/api/v1/song/relist",
-            "/api/v1/song/edit", "/api/v1/report/**",
+            "/api/v1/song/audit", "/api/v1/song/takedown/**", "/api/v1/song/relist/**",
+            "/api/v1/song/delete/**", "/api/v1/song/edit/**", "/api/v1/song/admin/**",
+            "/api/v1/report/**",
             "/api/v1/media/tools/**", "/api/v1/media/models/*/download",
             "/api/v1/media/models/*/use", "/api/v1/media/models/*/delete",
             "/api/v1/media/loudness/batch", "/api/v1/setting/set/**",

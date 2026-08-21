@@ -18,6 +18,8 @@ public class SongCardVO {
 
     private String style;
 
+    private Integer duration;
+
     private String coverUrl;
 
     private Long playCount;

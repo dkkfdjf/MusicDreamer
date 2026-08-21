@@ -48,6 +48,18 @@ public class CacheHelper {
         }
     }
 
+    /** 按前缀批量失效（keys 扫描仅适合开发规模数据量）。 */
+    public void evictByPrefix(String prefix) {
+        try {
+            java.util.Set<String> keys = redis.keys(prefix + "*");
+            if (keys != null && !keys.isEmpty()) {
+                redis.delete(keys);
+            }
+        } catch (Exception e) {
+            log.warn("redis cache evict-by-prefix degraded, prefix={}: {}", prefix, e.getMessage());
+        }
+    }
+
     /** SETNX 分布式锁，Redis 异常时放行（降级为单机语义）。 */
     public boolean tryLock(String key, Duration ttl) {
         try {

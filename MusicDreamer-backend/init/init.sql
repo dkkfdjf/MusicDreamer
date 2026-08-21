@@ -3,7 +3,7 @@
 -- MySQL 8.0 / utf8mb4 / InnoDB，共 19 张表
 -- 首次部署由 MySQL 容器自动执行（挂载 ./init -> /docker-entrypoint-initdb.d）
 -- ============================================================
-
+SET NAMES utf8mb4;
 CREATE DATABASE IF NOT EXISTS music DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE music;
 

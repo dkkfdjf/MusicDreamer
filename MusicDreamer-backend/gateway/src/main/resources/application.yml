@@ -19,7 +19,7 @@ spring:
           predicates: [ "Path=/api/v1/user/**" ]
         - id: music
           uri: lb://musicService8002
-          predicates: [ "Path=/api/v1/song/**,/api/v1/search/**,/api/v1/music/**,/api/v1/comment/**,/api/v1/recommend/**" ]
+          predicates: [ "Path=/api/v1/song/**,/api/v1/search/**,/api/v1/music/**,/api/v1/comment/**,/api/v1/recommend/**,/api/v1/report/**" ]
         - id: upload
           uri: lb://uploadService8007
           predicates: [ "Path=/api/v1/upload/**,/data/**" ]

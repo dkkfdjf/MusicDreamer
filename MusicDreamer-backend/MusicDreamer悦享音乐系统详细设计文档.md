@@ -712,6 +712,8 @@ stateDiagram-v2
 
 设计说明：reject_reason 字段语义为驳回或下架原因，供修改重提与管理复核。播放接口按状态拦截：审核中返回 3002，已下架返回 3003，不存在返回 3001。违规处理链路：下架、记录原因、降低歌手信誉分，情节严重时禁用歌手账户并站内通知。版本替换（F118—F122）仍走 song_version 审核中状态，替换文件经管理员确认后生效，与主状态机独立。
 
+管理操作补齐（2026-08-21）：管理员可删除歌曲（POST /song/delete/{id}），连带清理 song_version、comment、collect，播放历史保留用于统计审计，删除后失效热榜缓存。榜单与管理列表的卡片字段补齐 duration（热榜 CARD_COLS 与周榜 SQL 联表带出），前端不再显示 00:00；存量歌曲时长已用 ffprobe 按实际音频回填。任何可见性变化（发布/下架/上架/删除）均按前缀失效 chart:hot:{limit} 缓存，用户端即时生效。
+
 ## 6.2 搜索与推荐设计
 
 搜索（F006—F009）走 MySQL 索引：歌名与歌手名前缀匹配用 name 与 singer 索引，分类浏览按 style、language 过滤，统一分页返回；搜索历史（F013）存 Redis，每用户保留最近 20 条。
@@ -876,6 +878,8 @@ flowchart TB
 
 ## 10.3 工具与模型管理
 
+管理补齐（2026-08-21）：工具清单加入 ffprobe（与 ffmpeg、yt-dlp、whisper 一起纳入状态页），ffmpeg/ffprobe 二进制随项目放在 tools/bin；各工具版本探测参数按构建定制——ffmpeg/ffprobe 用 -version，whisper-cli 不支持 --version 改用 --help 探活，无版本号的构建展示友好文案。模型状态语义修正：使用中 = 当前选中且模型文件真实存在，未下载的规格显示未下载并给下载按钮，切换前校验文件已下载。管理端全量歌曲页补编辑功能（歌名/专辑/风格/语言，PUT /song/edit/{id}），上传表单补可选的封面图片与 LRC 歌词文件上传（/upload/image、/upload/lyric）。
+
 **工具探测（ToolsLocator）。** 按三级顺序定位可执行文件：
 
 1. 配置项 tools_path 显式指定（绝对路径或相对项目根）；
@@ -901,9 +905,9 @@ node scripts/fetch-tools.js --models   # 追加拉取 whisper 模型（可选）
 
 ## 10.4 下载管线（DOWNLOAD 任务）
 
-提交与查重：POST /media/download 提交来源链接与两个开关（是否要字幕、是否要转写）。服务先做 URL 识别（支持 B 站视频页、短链、BV 号、av 号与 YouTube 常见链接形态，正则族匹配），不支持的链接返回 400；再按 source_url 查重，已下载过的直接返回 409 与既有歌曲 ID（前端跳转播放）；通过后创建 PENDING 任务并立即返回 taskId。执行阶段如图 10-3 所示。
+提交与查重：POST /media/download 提交来源链接与两个开关（是否要字幕、是否要转写）。服务先做 URL 识别（支持 B 站视频页、短链、BV 号、av 号与 YouTube 常见链接形态，正则族匹配；粘贴整段分享文案时先定位 http/www 起始截取纯链接，标题与备注自动剔除，前后端各做一次），不支持的链接返回 400；再按 source_url 查重，已下载过的直接返回 409 与既有歌曲 ID（前端跳转播放）；通过后创建 PENDING 任务并立即返回 taskId。执行阶段如图 10-3 所示。
 
-入库与鉴权口径：经下载管线产出的歌曲入库置为审核中（status=1），管理员审核通过后全站公开可播，与歌手端本地上传同一套审核状态机（6.1 节）。上传主体为歌手与管理员——提交接口（POST /media/download）在网关路由层校验 role ≥ 1，普通用户仅可收听。
+入库与鉴权口径：经下载管线产出的歌曲入库置为审核中（status=1），管理员审核通过后全站公开可播，与歌手端本地上传同一套审核状态机（6.1 节）。上传主体为歌手与管理员——提交接口（POST /media/download）在网关路由层校验 role ≥ 1，普通用户仅可收听。第⑤步入库时的 fileUrl 指向 task 临时文件，落位 music/{songId}.mp3 后经内部接口 POST /song/internal/file 回写正式音频与封面地址（封面同步落位 image/{songId}.jpg），避免临时目录清理后歌曲不可播。
 
 ```mermaid
 %% caption: 图 10-3 下载管线执行流程

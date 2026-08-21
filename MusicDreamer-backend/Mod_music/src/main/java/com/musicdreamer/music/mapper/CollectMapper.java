@@ -1,6 +1,8 @@
 package com.musicdreamer.music.mapper;
 
 import com.musicdreamer.music.vo.UserSongPairVO;
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -13,4 +15,8 @@ public interface CollectMapper {
 
     @Select("SELECT user_id AS userId, song_id AS songId FROM collect")
     List<UserSongPairVO> selectCollectedPairs();
+
+    /** 删除歌曲时连带清理收藏（管理端删除歌曲用）。 */
+    @Delete("DELETE FROM collect WHERE song_id = #{songId}")
+    int deleteBySongId(@Param("songId") Long songId);
 }

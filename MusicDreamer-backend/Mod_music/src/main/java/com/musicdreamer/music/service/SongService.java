@@ -12,13 +12,17 @@ import com.musicdreamer.music.dto.InternalCreateDTO;
 import com.musicdreamer.music.dto.SongEditDTO;
 import com.musicdreamer.music.dto.SongSubmitDTO;
 import com.musicdreamer.music.dto.VersionDTO;
+import com.musicdreamer.music.entity.Comment;
 import com.musicdreamer.music.entity.Song;
 import com.musicdreamer.music.entity.SongVersion;
+import com.musicdreamer.music.mapper.CollectMapper;
+import com.musicdreamer.music.mapper.CommentMapper;
 import com.musicdreamer.music.mapper.PlayHistoryMapper;
 import com.musicdreamer.music.mapper.SongMapper;
 import com.musicdreamer.music.mapper.SongVersionMapper;
 import com.musicdreamer.music.util.CacheHelper;
 import com.musicdreamer.music.vo.SongCardVO;
+import com.musicdreamer.music.vo.SongManageVO;
 import com.musicdreamer.music.vo.SongDetailVO;
 import com.musicdreamer.music.vo.SongPlayVO;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +56,8 @@ public class SongService {
     private final SongMapper songMapper;
     private final SongVersionMapper songVersionMapper;
     private final PlayHistoryMapper playHistoryMapper;
+    private final CommentMapper commentMapper;
+    private final CollectMapper collectMapper;
     private final CacheHelper cache;
     private final OperationLogService operationLogService;
 
@@ -79,8 +85,13 @@ public class SongService {
         song.setSourceUrl(dto.getSourceUrl());
         song.setPlayCount(0L);
         song.setCollectCount(0);
-        song.setStatus(STATUS_UNDER_REVIEW);
+        // 管理员提交免审直接发布（自己审自己没意义）；歌手提交仍走审核流程
+        song.setStatus(AuthContext.getRole() == AuthContext.ROLE_ADMIN ? STATUS_PUBLISHED : STATUS_UNDER_REVIEW);
         songMapper.insert(song);
+        // 免审发布改变可见列表，需失效热榜缓存，否则用户端最长 10 分钟看不到
+        if (song.getStatus() == STATUS_PUBLISHED) {
+            evictHotChart();
+        }
         log.info("song submitted: id={}, singer={}, name={}", song.getId(), singerId, song.getName());
         return song.getId();
     }
@@ -142,6 +153,7 @@ public class SongService {
         if (dto.getStyle() != null) uw.set(Song::getStyle, dto.getStyle());
         if (dto.getLanguage() != null) uw.set(Song::getLanguage, dto.getLanguage());
         if (dto.getCoverUrl() != null) uw.set(Song::getCoverUrl, dto.getCoverUrl());
+        if (StringUtils.hasText(dto.getLyricUrl())) uw.set(Song::getLyricUrl, dto.getLyricUrl());
         songMapper.update(null, uw);
         operationLogService.record("EDIT", "PUT",
                 Map.of("songId", id, "singerId", song.getSingerId()));
@@ -159,34 +171,23 @@ public class SongService {
                 .set(Song::getRejectReason, null));
     }
 
-    /** 我上传的歌（管理员看全部）。 */
+    /** 我上传的歌（管理员看全部；联 user 带歌手昵称）。 */
     public Map<String, Object> mine(int page, int size, Integer status) {
-        Long uid = AuthContext.requireLogin();
-        Page<Song> pager = new Page<>(page, size);
-        LambdaQueryWrapper<Song> w = new LambdaQueryWrapper<>();
-        if (AuthContext.getRole() != AuthContext.ROLE_ADMIN) {
-            w.eq(Song::getSingerId, uid);
-        }
-        w.eq(status != null, Song::getStatus, status)
-                .orderByDesc(Song::getCreateTime)
-                .orderByDesc(Song::getId);
-        songMapper.selectPage(pager, w);
+        AuthContext.requireLogin();
+        boolean admin = AuthContext.getRole() == AuthContext.ROLE_ADMIN;
+        Page<SongManageVO> pager = new Page<>(page, size);
+        songMapper.selectManagePage(pager, admin ? null : AuthContext.getUserId(), status, null);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", pager.getTotal());
         result.put("songs", pager.getRecords());
         return result;
     }
 
-    /** 管理端全量列表。 */
+    /** 管理端全量列表（联 user 带歌手昵称）。 */
     public Map<String, Object> adminList(int page, int size, Integer status, String keyword) {
         AuthContext.requireAdmin();
-        Page<Song> pager = new Page<>(page, size);
-        LambdaQueryWrapper<Song> w = new LambdaQueryWrapper<Song>()
-                .eq(status != null, Song::getStatus, status)
-                .like(StringUtils.hasText(keyword), Song::getName, keyword)
-                .orderByDesc(Song::getCreateTime)
-                .orderByDesc(Song::getId);
-        songMapper.selectPage(pager, w);
+        Page<SongManageVO> pager = new Page<>(page, size);
+        songMapper.selectManagePage(pager, null, status, keyword);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", pager.getTotal());
         result.put("songs", pager.getRecords());
@@ -205,6 +206,7 @@ public class SongService {
                     .set(Song::getAuditorId, adminId)
                     .set(Song::getAuditTime, LocalDateTime.now())
                     .set(Song::getRejectReason, null));
+            evictHotChart();
         } else {
             if (!StringUtils.hasText(dto.getRejectReason())) {
                 throw new BizException(ErrorCode.PARAM_MISSING, "驳回原因不能为空");
@@ -228,6 +230,7 @@ public class SongService {
                 .eq(Song::getId, id)
                 .set(Song::getStatus, STATUS_TAKEN_DOWN)
                 .set(Song::getRejectReason, reason));
+        evictHotChart();
         operationLogService.record("TAKEDOWN", "POST", Map.of("songId", id, "reason", reason));
         log.info("song taken down: id={}, operator={}", id, AuthContext.getUserId());
     }
@@ -240,7 +243,21 @@ public class SongService {
                 .eq(Song::getId, id)
                 .set(Song::getStatus, STATUS_PUBLISHED)
                 .set(Song::getRejectReason, null));
+        evictHotChart();
         operationLogService.record("RELIST", "POST", Map.of("songId", id));
+    }
+
+    /** 删除歌曲（管理员）：连带版本/评论/收藏，播放历史保留，磁盘文件由存储侧治理。 */
+    public void delete(Long id) {
+        AuthContext.requireAdmin();
+        Song song = mustGet(id);
+        songMapper.deleteById(id);
+        songVersionMapper.delete(new LambdaQueryWrapper<SongVersion>().eq(SongVersion::getSongId, id));
+        commentMapper.delete(new LambdaQueryWrapper<Comment>().eq(Comment::getSongId, id));
+        collectMapper.deleteBySongId(id);
+        evictHotChart();
+        operationLogService.record("DELETE_SONG", "POST", Map.of("songId", id));
+        log.info("song deleted: id={}, name={}, operator={}", id, song.getName(), AuthContext.getUserId());
     }
 
     /** 版本列表（本人或管理员）。 */
@@ -336,6 +353,17 @@ public class SongService {
         }
     }
 
+    /** 音频/封面正式地址回写（Feign，下载落位 music/{id}.mp3 后，原地址指向 task 临时文件会被清理）。 */
+    public void internalFile(Long songId, String fileUrl, String coverUrl) {
+        mustGet(songId);
+        LambdaUpdateWrapper<Song> uw = new LambdaUpdateWrapper<Song>().eq(Song::getId, songId);
+        if (fileUrl != null) uw.set(Song::getFileUrl, fileUrl);
+        if (coverUrl != null) uw.set(Song::getCoverUrl, coverUrl);
+        if (fileUrl != null || coverUrl != null) {
+            songMapper.update(null, uw);
+        }
+    }
+
     public void internalLyric(Long songId, String lyricUrl) {
         mustGet(songId);
         songMapper.update(null, new LambdaUpdateWrapper<Song>()
@@ -344,6 +372,11 @@ public class SongService {
     }
 
     /** ---------- 私有 ---------- */
+
+    /** 可见性变化（发布/下架/上架）后失效热榜缓存，key 形如 chart:hot:{limit}。 */
+    private void evictHotChart() {
+        cache.evictByPrefix("chart:hot:");
+    }
 
     private Song mustGet(Long id) {
         Song song = songMapper.selectById(id);

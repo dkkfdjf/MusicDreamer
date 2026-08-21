@@ -15,4 +15,7 @@ public class SongEditDTO {
     private String language;
 
     private String coverUrl;
+
+    /** 歌词文件地址（OCR 识别结果存为 lrc 后回填）。 */
+    private String lyricUrl;
 }

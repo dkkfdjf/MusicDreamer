@@ -145,7 +145,9 @@ public class DownloadJob implements TaskManager.TaskRunner {
                 try {
                     Path cover = taskDir.resolve(task.getId() + "_cover.jpg");
                     HttpResponse<Path> resp = http.send(HttpRequest.newBuilder(URI.create(thumbnail))
-                            .header("User-Agent", UA).timeout(Duration.ofSeconds(10)).build(),
+                            .header("User-Agent", UA)
+                            .header("Referer", "https://www.bilibili.com/")
+                            .timeout(Duration.ofSeconds(10)).build(),
                             HttpResponse.BodyHandlers.ofFile(cover));
                     if (resp.statusCode() == 200) {
                         coverUrl = "/data/task/" + cover.getFileName();
@@ -192,6 +194,18 @@ public class DownloadJob implements TaskManager.TaskRunner {
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (Exception ignored) {
                 }
+            }
+            // 正式地址回写：入库时的 fileUrl 指向 task 临时文件，清理后失效，必须换成 music/{id}.mp3
+            Map<String, Object> fileBody = new HashMap<>();
+            fileBody.put("songId", songId);
+            fileBody.put("fileUrl", storage.fileUrl("music", songId + ".mp3"));
+            if (coverUrl != null) {
+                fileBody.put("coverUrl", storage.fileUrl("image", songId + ".jpg"));
+            }
+            try {
+                music.updateFile(fileBody);
+            } catch (Exception e) {
+                log.error("update fileUrl failed, songId={}: {}", songId, e.getMessage());
             }
             tasks.attachSong(task.getId(), songId);
             tasks.progress(task.getId(), 85, "入库完成（待审核），执行后置任务…");

@@ -29,11 +29,16 @@ public interface MusicClient {
     @PostMapping("/lyric")
     Mess updateLyric(@RequestBody Map<String, Object> body);
 
+    /** 音频/封面正式地址回写（下载落位 music/{id}.mp3 后）。 */
+    @PostMapping("/file")
+    Mess updateFile(@RequestBody Map<String, Object> body);
+
     class MusicClientFallback implements MusicClient {
         @Override public Mess findById(Long id) { return null; }
         @Override public Mess findBySource(String url) { return null; }
         @Override public Mess create(Map<String, Object> song) { return null; }
         @Override public Mess updateLoudness(Map<String, Object> body) { return null; }
         @Override public Mess updateLyric(Map<String, Object> body) { return null; }
+        @Override public Mess updateFile(Map<String, Object> body) { return null; }
     }
 }

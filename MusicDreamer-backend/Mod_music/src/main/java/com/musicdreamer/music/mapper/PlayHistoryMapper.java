@@ -38,10 +38,10 @@ public interface PlayHistoryMapper extends BaseMapper<PlayHistory> {
 
     /** 周榜（rise）：近 7 天按歌曲计数倒序，仅已发布。 */
     @Select("SELECT s.id, s.name, COALESCE(u.nickname, u.username) AS singer, s.singer_id AS singerId, "
-            + "s.album, s.style, s.cover_url AS coverUrl, COUNT(*) AS weekPlayCount "
+            + "s.album, s.style, s.duration, s.cover_url AS coverUrl, COUNT(*) AS weekPlayCount "
             + "FROM play_history p JOIN song s ON s.id = p.song_id LEFT JOIN user u ON u.id = s.singer_id "
             + "WHERE s.status = 2 AND p.played_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) "
-            + "GROUP BY s.id, s.name, u.nickname, u.username, s.singer_id, s.album, s.style, s.cover_url "
+            + "GROUP BY s.id, s.name, u.nickname, u.username, s.singer_id, s.album, s.style, s.duration, s.cover_url "
             + "ORDER BY weekPlayCount DESC LIMIT #{limit}")
     List<SongCardVO> selectRise(@Param("limit") int limit);
 
