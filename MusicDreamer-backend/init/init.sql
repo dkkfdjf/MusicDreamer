@@ -280,20 +280,6 @@ CREATE TABLE operation_log (
   KEY idx_oplog_user (user_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志表';
 
-CREATE TABLE announcement (
-  id           BIGINT NOT NULL AUTO_INCREMENT,
-  title        VARCHAR(200) NOT NULL COMMENT '公告标题',
-  content      TEXT NOT NULL COMMENT '公告内容',
-  type         TINYINT NOT NULL DEFAULT 1 COMMENT '类型(1系统 2运营 3活动)',
-  publisher_id BIGINT NOT NULL COMMENT '发布管理员ID',
-  status       TINYINT NOT NULL DEFAULT 1 COMMENT '状态(0下线 1发布)',
-  create_time  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time  DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_ann_type (type),
-  KEY idx_ann_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统公告表';
-
 CREATE TABLE sys_setting (
   cfg_key    VARCHAR(100) NOT NULL COMMENT '配置键',
   cfg_value  TEXT NOT NULL COMMENT '配置值(JSON)',
@@ -319,12 +305,13 @@ VALUES (2, '示例歌手', '课设演示账号', NOW(), 0, 0);
 
 -- 示例歌曲（占位文件路径，可经管理端替换；status=2 已发布）
 INSERT INTO song (name, singer_id, album, style, language, duration, file_url, cover_url, file_format, play_count, status, source_url) VALUES
-('示例歌曲一', 2, '课设专辑', '流行', '国语', 210, '/data/music/1.mp3', '/data/image/1.jpg', 'MP3', 32, 2, NULL),
-('示例歌曲二', 2, '课设专辑', '摇滚', '国语', 245, '/data/music/2.mp3', '/data/image/2.jpg', 'MP3', 21, 2, NULL),
+('示例歌曲一', 2, '课设专辑', '流行', '国语', 210, '/data/music/5.mp3', '/data/image/1.jpg', 'MP3', 32, 2, NULL),
+('示例歌曲二', 2, '课设专辑', '摇滚', '国语', 245, '/data/music/7.mp3', '/data/image/2.jpg', 'MP3', 21, 2, NULL),
 ('示例歌曲三', 2, '课设专辑', '民谣', '国语', 198, '/data/music/3.mp3', '/data/image/3.jpg', 'MP3', 17, 1, NULL);
 
+-- 注意：歌单名不得与「收藏」概念混淆（收藏=collect 表，与歌单相互独立）
 INSERT INTO playlist (user_id, name, description, is_public) VALUES
-(3, '我的收藏夹', '示例公开歌单', 1);
+(3, '示例歌单', '示例公开歌单', 1);
 INSERT INTO playlist_song (playlist_id, song_id, sort_order) VALUES (1, 1, 0), (1, 2, 1);
 
 INSERT INTO play_history (user_id, song_id, play_duration, play_complete, device_type, played_at) VALUES
@@ -334,9 +321,6 @@ INSERT INTO play_history (user_id, song_id, play_duration, play_complete, device
 
 INSERT INTO comment (song_id, user_id, content, like_count) VALUES
 (1, 3, '很好听，期待更多作品！', 3);
-
-INSERT INTO announcement (title, content, type, publisher_id) VALUES
-('欢迎使用悦享音乐', 'Music Dreamer 悦享音乐系统上线，欢迎体验。', 1, 1);
 
 INSERT INTO sys_setting (cfg_key, cfg_value) VALUES
 ('tools_path', '""'),

@@ -1,8 +1,10 @@
 # Music Dreamer 悦享音乐系统 详细设计文档
 
-> 版本：V2.3 ｜ 日期：2026-08-19 ｜ 项目：Music Dreamer 悦享音乐系统
+> 版本：V2.5 ｜ 日期：2026-08-22 ｜ 项目：Music Dreamer 悦享音乐系统
 > 依据：《需求规格说明书》V2.2（技术基线统一版）、《概要设计说明书》V1.0
 > 基线：JDK 17 + Spring Boot 2.7.18 + Spring Cloud 2021.0.9 + Spring Cloud Alibaba 2021.0.5.0 + Gateway + Nacos 2.2.3 + Sentinel 1.8.6 + MySQL 8.0 + Redis 6 + MyBatis-Plus + JWT
+> V2.5 变更：视频导入由 yt-dlp 同步下载并转换缩略图为 JPG，复用 cookies、代理与站点反风控参数；封面随音频正式落位并回写歌曲记录，文件移动或地址回写失败均不允许任务假成功。
+> V2.4 变更：歌曲批量内部查询统一为 `POST /api/v1/song/internal/batch`（JSON Long 数组）；收藏按歌手或风格筛选后再分页并返回筛选总数；初始化示例歌曲引用现有媒体文件路径。
 > V2.3 变更：发布策略恢复审核制（歌手/管理员上传、本地/链接两方式统一走管理员审核，通过后全站公开）
 > V2.2 变更：推荐算法确定为基于物品的协同过滤（新增 song_similarity 表，全库 19 张表）
 > V2.1 变更：工具存放改为项目根 tools/ 目录（fetch-tools 脚本按清单拉取）

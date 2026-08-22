@@ -34,7 +34,7 @@ spring:
           predicates: [ "Path=/api/v1/media/**,/ws/**" ]
         - id: setting
           uri: lb://settingService8005
-          predicates: [ "Path=/api/v1/setting/**,/api/v1/announcement/**" ]
+          predicates: [ "Path=/api/v1/setting/**" ]
 
 management:
   endpoints:

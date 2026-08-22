@@ -13,16 +13,10 @@ import com.musicdreamer.media.service.StorageService;
 import com.musicdreamer.media.service.TaskManager;
 import com.musicdreamer.media.tools.ToolsLocator;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -45,8 +39,6 @@ public class DownloadJob implements TaskManager.TaskRunner {
             Pattern.CASE_INSENSITIVE);
     private static final Pattern YOUTUBE = Pattern.compile(
             "(youtube\\.com|youtu\\.be|music\\.youtube\\.com)", Pattern.CASE_INSENSITIVE);
-    private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            + "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
     private final TaskManager tasks;
     private final ProcessExecutor executor;
@@ -55,10 +47,6 @@ public class DownloadJob implements TaskManager.TaskRunner {
     private final StorageService storage;
     private final MusicClient music;
     private final ObjectMapper json = new ObjectMapper();
-    private final HttpClient http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(Duration.ofSeconds(10)).build();
-
     private volatile String buvidFile;
     private volatile long buvidAt = 0;
 
@@ -97,13 +85,12 @@ public class DownloadJob implements TaskManager.TaskRunner {
             }
             String title = textOr(meta, "title", "导入歌曲");
             long duration = meta.path("duration").asLong(0);
-            String thumbnail = meta.path("thumbnail").asText(null);
-
             // ② 下载（进度 0-60）
             tasks.progress(task.getId(), 5, "正在下载音频…");
             String outTpl = taskDir.resolve(task.getId() + "_temp.%(ext)s").toString();
             List<String> cmd = new ArrayList<>(List.of(ytdlp,
                     "-f", "bestaudio/best", "--extract-audio", "--audio-format", "best",
+                    "--write-thumbnail", "--convert-thumbnails", "jpg",
                     "--newline", "--no-playlist",
                     "-o", outTpl));
             cmd.addAll(netArgs.build(url));
@@ -138,24 +125,10 @@ public class DownloadJob implements TaskManager.TaskRunner {
                 return;
             }
 
-            // ④ 封面（失败不阻断）
+            // ④ 封面：由 yt-dlp 与音频一起下载，复用 B 站 cookies、代理和反风控参数。
             tasks.progress(task.getId(), 76, "正在保存封面…");
-            String coverUrl = null;
-            if (thumbnail != null && !thumbnail.isBlank()) {
-                try {
-                    Path cover = taskDir.resolve(task.getId() + "_cover.jpg");
-                    HttpResponse<Path> resp = http.send(HttpRequest.newBuilder(URI.create(thumbnail))
-                            .header("User-Agent", UA)
-                            .header("Referer", "https://www.bilibili.com/")
-                            .timeout(Duration.ofSeconds(10)).build(),
-                            HttpResponse.BodyHandlers.ofFile(cover));
-                    if (resp.statusCode() == 200) {
-                        coverUrl = "/data/task/" + cover.getFileName();
-                    }
-                } catch (Exception e) {
-                    log.warn("cover download skipped: {}", e.getMessage());
-                }
-            }
+            Path cover = findCover(taskDir, task.getId());
+            String coverUrl = cover == null ? null : storage.fileUrl("task", cover.getFileName().toString());
 
             // ⑤ Feign 入库（status=1 审核中；失败回 PENDING 重试 ≤3 次）
             tasks.progress(task.getId(), 80, "正在写入歌曲库…");
@@ -164,7 +137,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
             song.put("singerId", task.getOperator());
             song.put("duration", duration);
             song.put("fileUrl", storage.fileUrl("task", task.getId() + "_out.mp3"));
-            song.put("coverUrl", coverUrl);
+            // 临时目录会在任务结束时清理，不能把临时封面地址作为歌曲最终数据。
+            song.put("coverUrl", null);
             song.put("fileFormat", "MP3");
             song.put("sourceUrl", url);
             Mess created = null;
@@ -184,28 +158,27 @@ public class DownloadJob implements TaskManager.TaskRunner {
                 tasks.finish(task.getId(), "FAILED", "入库返回异常");
                 return;
             }
-            // 正式落位：task 目录 -> music 目录（fileUrl 同步更新语义）
-            Path finalMp3 = storage.dir("music").resolve(songId + ".mp3");
+            // 正式落位：task 目录 -> music 目录。文件名带随机后缀：
+            // 只用 songId 会在 id 复用（删歌重传）或与历史遗留文件同名时静默覆盖，
+            // 造成封面/音频在歌曲间互相串位
+            String suffix = Integer.toHexString((int) (Math.random() * 0xffff));
+            Path finalMp3 = storage.dir("music").resolve(songId + "-" + suffix + ".mp3");
             Files.move(mp3, finalMp3, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Path finalCover = null;
             if (coverUrl != null) {
-                try {
-                    Files.move(taskDir.resolve(task.getId() + "_cover.jpg"),
-                            storage.dir("image").resolve(songId + ".jpg"),
-                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                } catch (Exception ignored) {
-                }
+                finalCover = storage.dir("image").resolve(songId + "-" + suffix + ".jpg");
+                Files.move(cover, finalCover, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
-            // 正式地址回写：入库时的 fileUrl 指向 task 临时文件，清理后失效，必须换成 music/{id}.mp3
+            // 正式地址回写：入库时的 fileUrl 指向 task 临时文件，清理后失效，必须换成最终路径
             Map<String, Object> fileBody = new HashMap<>();
             fileBody.put("songId", songId);
-            fileBody.put("fileUrl", storage.fileUrl("music", songId + ".mp3"));
-            if (coverUrl != null) {
-                fileBody.put("coverUrl", storage.fileUrl("image", songId + ".jpg"));
+            fileBody.put("fileUrl", storage.fileUrl("music", songId + "-" + suffix + ".mp3"));
+            if (finalCover != null) {
+                fileBody.put("coverUrl", storage.fileUrl("image", finalCover.getFileName().toString()));
             }
-            try {
-                music.updateFile(fileBody);
-            } catch (Exception e) {
-                log.error("update fileUrl failed, songId={}: {}", songId, e.getMessage());
+            Mess updated = music.updateFile(fileBody);
+            if (updated == null || !updated.isOk()) {
+                throw new IllegalStateException("歌曲文件地址回写失败");
             }
             tasks.attachSong(task.getId(), songId);
             tasks.progress(task.getId(), 85, "入库完成（待审核），执行后置任务…");
@@ -266,7 +239,24 @@ public class DownloadJob implements TaskManager.TaskRunner {
     private Path findTemp(Path dir, int taskId) {
         try (var stream = Files.newDirectoryStream(dir, taskId + "_temp*")) {
             for (Path p : stream) {
-                return p;
+                String name = p.getFileName().toString().toLowerCase();
+                if (!name.endsWith(".jpg") && !name.endsWith(".jpeg") && !name.endsWith(".png")
+                        && !name.endsWith(".webp")) {
+                    return p;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private Path findCover(Path dir, int taskId) {
+        try (var stream = Files.newDirectoryStream(dir, taskId + "_temp*")) {
+            for (Path p : stream) {
+                String name = p.getFileName().toString().toLowerCase();
+                if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+                    return p;
+                }
             }
         } catch (Exception ignored) {
         }

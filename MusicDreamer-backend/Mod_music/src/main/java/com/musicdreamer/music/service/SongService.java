@@ -20,6 +20,7 @@ import com.musicdreamer.music.mapper.CommentMapper;
 import com.musicdreamer.music.mapper.PlayHistoryMapper;
 import com.musicdreamer.music.mapper.SongMapper;
 import com.musicdreamer.music.mapper.SongVersionMapper;
+import com.musicdreamer.music.mapper.UserMapper;
 import com.musicdreamer.music.util.CacheHelper;
 import com.musicdreamer.music.vo.SongCardVO;
 import com.musicdreamer.music.vo.SongManageVO;
@@ -57,6 +58,7 @@ public class SongService {
     private final SongVersionMapper songVersionMapper;
     private final PlayHistoryMapper playHistoryMapper;
     private final CommentMapper commentMapper;
+    private final UserMapper userMapper;
     private final CollectMapper collectMapper;
     private final CacheHelper cache;
     private final OperationLogService operationLogService;
@@ -332,8 +334,15 @@ public class SongService {
         song.setSourceUrl(dto.getSourceUrl());
         song.setPlayCount(0L);
         song.setCollectCount(0);
-        song.setStatus(STATUS_UNDER_REVIEW);
+        // 与手动上传(submit)一致：操作者是管理员时直接发布，免去人工审核
+        Integer operatorRole = dto.getSingerId() == null ? null : userMapper.selectRole(dto.getSingerId());
+        boolean byAdmin = operatorRole != null && operatorRole == AuthContext.ROLE_ADMIN;
+        song.setStatus(byAdmin ? STATUS_PUBLISHED : STATUS_UNDER_REVIEW);
         songMapper.insert(song);
+        // 管理员导入直接发布同样改变可见列表，需失效热榜缓存（与 submit 同理）
+        if (byAdmin) {
+            evictHotChart();
+        }
         log.info("song created by media pipeline: id={}, source={}", song.getId(), dto.getSourceUrl());
         return song.getId();
     }

@@ -38,5 +38,5 @@ management:
         include: health,info,prometheus
 
 upload:
-  storage-root: ${STORAGE_ROOT:./data}
+  storage-root: ${STORAGE_ROOT:D:/Desktop/MusicDreamer/backend/data}
 

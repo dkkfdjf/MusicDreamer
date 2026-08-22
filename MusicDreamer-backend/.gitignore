@@ -27,3 +27,7 @@ data/
 Thumbs.db
 tools/nacos/
 tools/db.cnf
+
+# 调试产物
+.playwright-cli/
+cover-check.png

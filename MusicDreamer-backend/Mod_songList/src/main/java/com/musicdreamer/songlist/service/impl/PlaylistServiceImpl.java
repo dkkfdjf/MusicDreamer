@@ -252,6 +252,8 @@ public class PlaylistServiceImpl implements PlaylistService {
                 ? Collections.emptyList()
                 : playlistMapper.selectBatchIds(favoriteTimeByPlaylist.keySet())
                 .stream()
+                // 收藏是引用而非快照：源歌单取消公开后从收藏区消失（删除时收藏记录已级联清理）
+                .filter(p -> Boolean.TRUE.equals(p.getIsPublic()) && !userId.equals(p.getUserId()))
                 .sorted((a, b) -> {
                     LocalDateTime ta = favoriteTimeByPlaylist.get(a.getId());
                     LocalDateTime tb = favoriteTimeByPlaylist.get(b.getId());
@@ -275,12 +277,14 @@ public class PlaylistServiceImpl implements PlaylistService {
     }
 
     @Override
-    public Map<String, Object> publicList(long page, long size, String keyword) {
+    public Map<String, Object> publicList(long page, long size, String keyword, Long userId) {
         long cur = Math.max(1, page);
         long pageSize = size <= 0 ? 10 : Math.min(100, size);
 
         LambdaQueryWrapper<Playlist> qw = new LambdaQueryWrapper<Playlist>()
-                .eq(Playlist::getIsPublic, true);
+                .eq(Playlist::getIsPublic, true)
+                // 登录用户在广场看不到自己的歌单（自己的在"我的歌单"里）
+                .ne(userId != null, Playlist::getUserId, userId);
         if (keyword != null && !keyword.isBlank()) {
             qw.like(Playlist::getName, keyword.trim());
         }
@@ -306,6 +310,10 @@ public class PlaylistServiceImpl implements PlaylistService {
     @Override
     public Map<String, Object> favorite(Long id, Long userId) {
         Playlist p = requirePlaylist(id);
+        // 自己的歌单不用收藏，直接在我的歌单里管理
+        if (userId.equals(p.getUserId())) {
+            throw new BizException(ErrorCode.NO_PERMISSION, "不能收藏自己的歌单");
+        }
         // 仅公开歌单可被收藏
         if (!Boolean.TRUE.equals(p.getIsPublic())) {
             throw new BizException(ErrorCode.NO_PERMISSION);

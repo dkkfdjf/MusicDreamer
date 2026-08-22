@@ -104,6 +104,8 @@ public class PlaylistController {
     public Mess publicList(@RequestParam(value = "page", defaultValue = "1") long page,
                            @RequestParam(value = "size", defaultValue = "10") long size,
                            @RequestParam(value = "keyword", required = false) String keyword) {
-        return Mess.ok(playlistService.publicList(page, size, keyword));
+        // 广场看别人的歌单：登录时排除自己创建的（匿名时无身份，全量公开歌单）
+        Long userId = AuthContext.getUserId();
+        return Mess.ok(playlistService.publicList(page, size, keyword, userId));
     }
 }

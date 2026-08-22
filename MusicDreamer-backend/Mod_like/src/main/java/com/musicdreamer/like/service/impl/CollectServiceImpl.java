@@ -92,20 +92,32 @@ public class CollectServiceImpl implements CollectService {
     public Map<String, Object> list(Long userId, long page, long size, String singer, String style) {
         long cur = Math.max(1, page);
         long pageSize = size <= 0 ? 10 : Math.min(100, size);
+        String singerCond = singer == null ? "" : singer.trim();
+        String styleCond = style == null ? "" : style.trim();
+        boolean hasFilter = !singerCond.isEmpty() || !styleCond.isEmpty();
 
-        // 收藏时间倒序分页
-        Page<Collect> pager = collectMapper.selectPage(new Page<>(cur, pageSize),
-                new LambdaQueryWrapper<Collect>()
+        LambdaQueryWrapper<Collect> query = new LambdaQueryWrapper<Collect>()
                         .eq(Collect::getUserId, userId)
                         .orderByDesc(Collect::getCreateTime)
-                        .orderByDesc(Collect::getId));
+                        .orderByDesc(Collect::getId);
+        // 筛选条件依赖音乐服务拼装字段，须在过滤后再分页，保证 total 与 records 同口径。
+        List<Collect> records;
+        long total;
+        if (hasFilter) {
+            records = collectMapper.selectList(query);
+            total = records.size();
+        } else {
+            Page<Collect> pager = collectMapper.selectPage(new Page<>(cur, pageSize), query);
+            records = pager.getRecords();
+            total = pager.getTotal();
+        }
 
-        List<Long> songIds = pager.getRecords().stream()
+        List<Long> songIds = records.stream()
                 .map(Collect::getSongId).collect(Collectors.toList());
         Map<Long, Map<String, Object>> songs = songRemoteService.batchSongs(songIds);
 
-        List<CollectItemVO> items = new ArrayList<>(pager.getRecords().size());
-        for (Collect c : pager.getRecords()) {
+        List<CollectItemVO> items = new ArrayList<>(records.size());
+        for (Collect c : records) {
             CollectItemVO vo = new CollectItemVO();
             vo.setSongId(c.getSongId());
             vo.setCollectTime(c.getCreateTime());
@@ -123,19 +135,20 @@ public class CollectServiceImpl implements CollectService {
             items.add(vo);
         }
 
-        // singer/style 筛选在拼装后过滤（课设数据量小，可接受）
-        String singerCond = singer == null ? "" : singer.trim();
-        String styleCond = style == null ? "" : style.trim();
-        if (!singerCond.isEmpty() || !styleCond.isEmpty()) {
+        if (hasFilter) {
             items = items.stream()
                     .filter(vo -> matchSinger(vo, singerCond) && matchStyle(vo, styleCond))
                     .collect(Collectors.toList());
+            total = items.size();
+            int from = (int) Math.min((cur - 1) * pageSize, total);
+            int to = (int) Math.min(from + pageSize, total);
+            items = new ArrayList<>(items.subList(from, to));
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", pager.getTotal());
-        result.put("page", pager.getCurrent());
-        result.put("size", pager.getSize());
+        result.put("total", total);
+        result.put("page", cur);
+        result.put("size", pageSize);
         result.put("records", items);
         return result;
     }

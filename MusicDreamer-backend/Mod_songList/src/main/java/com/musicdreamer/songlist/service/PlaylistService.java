@@ -39,7 +39,7 @@ public interface PlaylistService {
     void unfavorite(Long id, Long userId);
 
     /** 公开歌单分页（keyword 匹配名称）。 */
-    Map<String, Object> publicList(long page, long size, String keyword);
+    Map<String, Object> publicList(long page, long size, String keyword, Long userId);
 
     /** 批量统计歌单歌曲数。 */
     Map<Long, Long> songCounts(List<Long> playlistIds);

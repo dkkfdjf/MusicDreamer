@@ -35,9 +35,18 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/user/login", "/api/v1/user/register", "/api/v1/user/activate",
             "/api/v1/user/password/reset",
             "/api/v1/search/**", "/api/v1/song/play/**", "/api/v1/song/detail/**",
-            "/api/v1/announcement/**", "/api/v1/song/chart/**",
+            "/api/v1/song/chart/**",
             "/api/v1/comment/list/**", "/api/v1/recommend/list",
             "/data/**",
+    };
+
+    /**
+     * 可匿名访问的公开数据（仅 GET）；携带有效 token 时仍解析并透传身份，
+     * 服务层据此区分"公开歌单匿名可看 / 私有歌单仅本人"。
+     */
+    private static final String[] OPTIONAL_AUTH = {
+            "/api/v1/playlist/public/**",
+            "/api/v1/playlist/*",
     };
 
     /** 需要 role=2（管理员）。 */
@@ -68,12 +77,15 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
 
         String auth = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        boolean optional = "GET".equals(request.getMethodValue()) && matchAny(path, OPTIONAL_AUTH);
         if (auth == null || !auth.startsWith("Bearer ")) {
-            return reject(exchange, HttpStatus.UNAUTHORIZED, 2006, "Token已过期");
+            return optional ? chain.filter(sanitize(exchange))
+                    : reject(exchange, HttpStatus.UNAUTHORIZED, 2006, "Token已过期");
         }
         Claims claims = JwtUtil.parse(auth.substring(7));
         if (claims == null) {
-            return reject(exchange, HttpStatus.UNAUTHORIZED, 2006, "Token已过期");
+            return optional ? chain.filter(sanitize(exchange))
+                    : reject(exchange, HttpStatus.UNAUTHORIZED, 2006, "Token已过期");
         }
 
         Long userId = claims.get(JwtUtil.CLAIM_USER_ID, Number.class).longValue();

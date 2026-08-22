@@ -4,7 +4,8 @@ import com.musicdreamer.common.api.Mess;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
@@ -20,6 +21,6 @@ public interface SongClient {
     Mess findById(@PathVariable("id") Long id);
 
     /** 批量查歌曲详情，用于歌单详情/列表拼装。 */
-    @GetMapping("/batch")
-    Mess findByIds(@RequestParam("ids") List<Long> ids);
+    @PostMapping("/batch")
+    Mess findByIds(@RequestBody List<Long> ids);
 }
