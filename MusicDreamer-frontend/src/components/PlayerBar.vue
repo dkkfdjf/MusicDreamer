@@ -1,6 +1,6 @@
 <template>
   <footer class="player-bar" ref="rootEl">
-    <!-- 左：当前曲目 -->
+    <!-- 左：当前曲目 + 收藏（喜欢属于曲日本身，语境化放封面旁） -->
     <div class="track">
       <div class="cv">
         <img v-if="player.current && player.current.coverUrl && !coverFail"
@@ -11,11 +11,22 @@
         <b>{{ player.current ? player.current.name : '未在播放' }}</b>
         <span>{{ player.current ? player.currentSinger : 'Music Dreamer' }}</span>
       </div>
+      <button class="ctl heart" :class="{ on: currentCollected }" :disabled="!player.current"
+        :title="currentCollected ? '取消收藏' : '收藏当前歌曲'" @click="collectCurrent">
+        <svg width="16" height="16" viewBox="0 0 24 24" :fill="currentCollected ? 'currentColor' : 'none'"
+          stroke="currentColor" stroke-width="2">
+          <path d="M12 21s-8-4.5-8-10a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3c0 5.5-8 10-8 10z" />
+        </svg>
+      </button>
     </div>
 
-    <!-- 中：控制 + 波形进度（preview-v2：冻结的回声波形当进度条） -->
+    <!-- 中：歌词开关 + 控制 + 进度（preview-v2：冻结的回声波形当进度条） -->
     <div class="mid">
       <div class="ctrls">
+        <button class="ctl word" :class="wordState" :disabled="!player.current"
+          :title="wordTitle" @click="lyrics.togglePanel()">
+          <span class="word-glyph">詞</span>
+        </button>
         <button class="ctl" :title="player.modeLabel" @click="player.cycleMode()">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8" />
@@ -68,15 +79,8 @@
       </div>
     </div>
 
-    <!-- 右：收藏 / 倍速 / A-B / 音量 -->
+    <!-- 右：倍速 / A-B / 音量（听力工具组，收紧排列） -->
     <div class="end">
-      <button class="ctl heart" :class="{ on: currentCollected }" :disabled="!player.current"
-        :title="currentCollected ? '取消收藏' : '收藏当前歌曲'" @click="collectCurrent">
-        <svg width="16" height="16" viewBox="0 0 24 24" :fill="currentCollected ? 'currentColor' : 'none'"
-          stroke="currentColor" stroke-width="2">
-          <path d="M12 21s-8-4.5-8-10a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3c0 5.5-8 10-8 10z" />
-        </svg>
-      </button>
       <button class="pill" title="播放速度（点击切换）" @click="cycleRate">{{ rateLabel }}</button>
       <button class="pill"
         :class="{ 'set-a': player.abA !== null && player.abB === null, looping: player.abA !== null && player.abB !== null }"
@@ -122,12 +126,14 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { usePlayerStore, getAudioEl } from '../stores/player'
 import { useUserStore } from '../stores/user'
+import { useLyricsStore } from '../stores/lyrics'
 import { resolveFileUrl, singerName } from '../utils'
 import { gsap, prefersReduced } from '../utils/motion'
 import { getAnalyser } from '../utils/audioAnalyser'
 
 const player = usePlayerStore()
 const userStore = useUserStore()
+const lyrics = useLyricsStore()
 const coverFail = ref(false)
 const queueOpen = ref(false)
 const barEl = ref(null)
@@ -187,6 +193,16 @@ const volPct = computed(() => Math.round((player.volume || 0) * 100))
 const currentCollected = computed(() =>
   player.current ? userStore.isCollected(player.current.id) : false
 )
+
+/* 「詞」按钮三态：无歌词（暗灰）/ 有歌词未开（亮）/ 面板开启（品牌渐变） */
+const wordState = computed(() => ({
+  none: !lyrics.hasLyrics,
+  open: lyrics.panelOpen
+}))
+const wordTitle = computed(() => {
+  if (!lyrics.hasLyrics) return '暂无歌词，点击打开歌词面板获取'
+  return lyrics.panelOpen ? '收起歌词' : '展开歌词'
+})
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const rateLabel = computed(() => (Number(player.rate) || 1).toFixed(2).replace(/0$/, '') + 'x')
@@ -282,12 +298,25 @@ function toggleMute() {
   pointer-events: none;
 }
 
-/* 左：当前曲目 */
+/* 左：当前曲目 + 收藏 */
 .track {
   display: flex;
   align-items: center;
   gap: 13px;
   min-width: 0;
+}
+.track .heart {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+}
+.track .heart.on {
+  color: var(--magenta);
+  filter: drop-shadow(0 0 6px rgba(225, 29, 146, 0.35));
+}
+.track .heart:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .track .cv {
   width: 52px;
@@ -395,6 +424,10 @@ function toggleMute() {
   font-size: 11px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  /* 定宽 5 字符（可容 99:59）：时间文本长度变化（0:00 -> 12:34）不再挤压进度条 */
+  width: 5ch;
+  flex-shrink: 0;
+  text-align: center;
   flex-shrink: 0;
 }
 /* 普通进度条：暖墨细轨道 + 品牌渐变填充，悬停加粗 */
@@ -447,17 +480,40 @@ function toggleMute() {
   transform: translateY(-50%) scale(1);
 }
 
-/* 右：收藏 / 倍速 / A-B / 音量 */
+/* 右：倍速 / A-B / 音量 —— 听力工具组：更紧凑的间距 + 音量前细分隔线，
+   避免控件稀疏地散在窗口右缘 */
 .end {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 9px;
   justify-content: flex-end;
 }
-.heart.on {
-  color: var(--magenta);
+.end .vol {
+  gap: 7px;
+  padding-left: 13px;
+  border-left: 1px solid rgba(92, 72, 50, 0.14);
 }
-.heart:disabled {
+/* 「詞」按钮：繁体言字旁，三态（无歌词暗灰 / 有歌词亮 / 开启品牌渐变） */
+.word {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(92, 72, 50, 0.3);
+  transition: color 0.2s ease, text-shadow 0.2s ease, transform 0.15s ease;
+}
+.word:not(.none):not(.open) {
+  color: var(--text);
+}
+.word.open {
+  background: linear-gradient(135deg, var(--accent), var(--magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+.word:not(:disabled):hover {
+  transform: scale(1.12);
+}
+.word:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }

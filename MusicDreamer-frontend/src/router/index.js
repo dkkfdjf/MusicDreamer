@@ -10,8 +10,11 @@ const routes = [
   { path: '/songs', name: 'songs', component: () => import('../views/BrowseSongsView.vue') },
   { path: '/search', redirect: (to) => ({ path: '/songs', query: to.query }) },
   { path: '/playlist/:id', name: 'playlist-detail', component: () => import('../views/PlaylistDetailView.vue') },
-  { path: '/collection', name: 'collection', component: () => import('../views/CollectionView.vue'), meta: { requiresAuth: true } },
-  { path: '/my/playlists', name: 'my-playlists', component: () => import('../views/MyPlaylistsView.vue'), meta: { requiresAuth: true } },
+  { path: '/album/:id', name: 'album-detail', component: () => import('../views/AlbumDetailView.vue') },
+  // 音乐库收敛了旧"我的收藏/我的歌单"两个入口
+  { path: '/library', name: 'library', component: () => import('../views/LibraryView.vue'), meta: { requiresAuth: true } },
+  { path: '/collection', redirect: '/library?tab=songs' },
+  { path: '/my/playlists', redirect: '/library?tab=playlists' },
   { path: '/recent', name: 'recent', component: () => import('../views/RecentView.vue'), meta: { requiresAuth: true } },
   { path: '/upload', name: 'upload', component: () => import('../views/UploadView.vue'), meta: { requiresAuth: true, minRole: 1 } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, minRole: 2 } },

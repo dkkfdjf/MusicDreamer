@@ -3,11 +3,12 @@
     <router-view />
   </div>
   <template v-else>
-    <!-- 外壳：上=侧栏+内容，下=全宽播放条（压住整个窗口下缘，与画布一体） -->
+    <!-- 外壳：上=侧栏+内容（+内嵌歌词栏），下=全宽播放条（压住整个窗口下缘，与画布一体） -->
     <div class="app-shell">
       <div class="main-container">
         <SideNav />
         <div class="app-main">
+          <div class="content-row">
           <main class="content">
         <!-- 内容区顶部：搜索 / 用户资料 -->
         <div class="content-top">
@@ -40,11 +41,13 @@
             <router-view />
           </div>
           </main>
+          <!-- 内嵌歌词栏：内容区右缘的常驻列，「詞」开关控制展开 -->
+          <LyricsPanel />
+          </div>
         </div>
       </div>
       <PlayerBar />
     </div>
-    <DesktopLyrics v-if="lyricsVisible" @close="lyricsVisible = false" />
     <SingerApplyDialog v-model="applyVisible" />
   </template>
 </template>
@@ -55,7 +58,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message, confirm } from './utils/feedback'
 import SideNav from './components/SideNav.vue'
 import PlayerBar from './components/PlayerBar.vue'
-import DesktopLyrics from './components/DesktopLyrics.vue'
+import LyricsPanel from './components/LyricsPanel.vue'
 import SingerApplyDialog from './components/SingerApplyDialog.vue'
 import api from './api'
 import { usePlayerStore } from './stores/player'
@@ -67,7 +70,6 @@ const player = usePlayerStore()
 const user = useUserStore()
 const keyword = ref('')
 const applyVisible = ref(false)
-const lyricsVisible = ref(false)
 
 const isBare = computed(() => !!route.meta.bare)
 const roleLabel = computed(() => ({ 0: '听众', 1: '音乐人', 2: '管理员' }[user.role] || '听众'))
@@ -84,9 +86,6 @@ watch(
 // 侧栏"歌手认证"与"桌面歌词"入口（事件总线式简单通信）
 if (typeof window !== 'undefined') {
   window.addEventListener('md-open-singer-apply', () => { applyVisible.value = true })
-  window.addEventListener('md-toggle-lyrics', (e) => {
-    lyricsVisible.value = !!(e.detail && e.detail.on)
-  })
 }
 
 function doSearch() {
@@ -105,8 +104,6 @@ function logout() {
       api.logout().catch(() => {})
       user.clear()
       player.stop()
-      // 退出登录必须关闭桌面歌词：全局浮层不随路由销毁，否则换账号后仍共享歌词窗口
-      lyricsVisible.value = false
       message.success('已退出登录')
       router.push('/login')
     })

@@ -18,14 +18,14 @@
       <div v-if="user.isLogin" class="playlist-nav">
         <!-- 主区域：点击直达"我的歌单"页；右侧小箭头才展开下拉快选 -->
         <div class="playlist-row">
-          <router-link to="/my/playlists" class="nav-item playlist-trigger"
-            :class="{ active: route.path === '/my/playlists' }">
+          <router-link to="/library" class="nav-item playlist-trigger"
+            :class="{ active: isLibraryArea && route.path === '/library' }">
             <span class="nav-icon">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 7h18M3 12h18M3 17h12" />
               </svg>
             </span>
-            <span class="nav-text">我的歌单</span>
+            <span class="nav-text">音乐库</span>
           </router-link>
           <button class="pl-expand" :class="{ open: playlistsOpen }" :aria-expanded="playlistsOpen"
             title="展开歌单快选" @click="playlistsOpen = !playlistsOpen">
@@ -53,18 +53,6 @@
 
       <template v-if="user.isLogin">
         <div class="nav-section-title">工具</div>
-        <div class="nav-item" :class="{ active: lyricsOn }" title="悬浮歌词（播放时显示当前句）"
-          @click="toggleLyrics">
-          <span class="nav-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          </span>
-          <span class="nav-text">桌面歌词</span>
-        </div>
         <router-link v-if="user.isSinger" to="/upload" class="nav-item"
           :class="{ active: isActive('/upload') }">
           <span class="nav-icon">
@@ -116,12 +104,11 @@ import { revealStagger } from '../utils/motion'
 
 const route = useRoute()
 const user = useUserStore()
-const lyricsOn = ref(false)
 const playlists = ref([])
 const collectedPl = ref([])
 const playlistsOpen = ref(false)
 const navEl = ref(null)
-const isPlaylistArea = computed(() => route.path === '/my/playlists' || route.path.startsWith('/playlist/'))
+const isLibraryArea = computed(() => route.path === '/library' || route.path.startsWith('/playlist/') || route.path.startsWith('/album/'))
 
 onMounted(() => {
   if (navEl.value) revealStagger(navEl.value.querySelectorAll('.nav-item'), { y: 10, stagger: 0.06 })
@@ -148,17 +135,13 @@ watch(() => user.token, (token) => {
   else { playlists.value = []; collectedPl.value = [] }
 }, { immediate: true })
 
-watch(isPlaylistArea, (active) => {
+watch(isLibraryArea, (active) => {
   if (active) playlistsOpen.value = true
 }, { immediate: true })
 
 window.addEventListener('md-playlists-changed', refreshPlaylists)
 onBeforeUnmount(() => window.removeEventListener('md-playlists-changed', refreshPlaylists))
 
-function toggleLyrics() {
-  lyricsOn.value = !lyricsOn.value
-  window.dispatchEvent(new CustomEvent('md-toggle-lyrics', { detail: { on: lyricsOn.value } }))
-}
 
 const libNavs = [
   {
@@ -175,11 +158,6 @@ const libNavs = [
     to: '/recent',
     text: '最近播放',
     icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>'
-  },
-  {
-    to: '/collection',
-    text: '我的收藏',
-    icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>'
   }
 ]
 

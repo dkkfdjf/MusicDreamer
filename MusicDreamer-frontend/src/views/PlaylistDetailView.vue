@@ -4,14 +4,17 @@
       <div class="pl-cover">
         <el-image v-if="playlist.coverUrl" :src="resolveFileUrl(playlist.coverUrl)" fit="cover"
           style="width: 100%; height: 100%">
-          <template #error><span class="ph c1"></span></template>
+          <template #error><GenCover :name="playlist.name" :id="playlist.id" glyph="♪" /></template>
         </el-image>
-        <span v-else class="ph" :class="'c' + ((Number(playlist.id || 0) % 6) + 1)"></span>
+        <GenCover v-else :name="playlist.name" :id="playlist.id" glyph="♪" />
       </div>
       <div class="pl-meta">
         <div class="eyebrow">Playlist</div>
         <h2>{{ playlist.name }}</h2>
-        <p class="desc">{{ playlist.description || '暂无描述' }}</p>
+        <p class="desc">
+          {{ playlist.description || '暂无描述' }}
+          <span v-if="!isOwner && playlist.creatorName" class="creator">by {{ playlist.creatorName }}</span>
+        </p>
         <div class="actions">
           <button class="btn btn-primary" :disabled="!songs.length" @click="playerStore.playQueue(songs, 0)">
             <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M7 5v14l12-7z" /></svg>
@@ -21,6 +24,7 @@
           <button v-if="userStore.isLogin && !isOwner" class="btn btn-secondary" @click="toggleFavorite">
             {{ favorited ? '取消收藏' : '收藏歌单' }}
           </button>
+          <button v-if="isOwner" class="btn btn-secondary" @click="openEdit">编辑信息</button>
           <button v-if="isOwner" class="btn btn-danger" @click="remove">删除歌单</button>
         </div>
       </div>
@@ -43,6 +47,22 @@
         {{ loadError ? '重新加载' : '去首页选歌' }}
       </button>
     </div>
+
+    <!-- 编辑歌单信息（仅创建者）：改名/描述/公开开关 -->
+    <el-dialog v-model="editVisible" title="编辑歌单信息" width="420px">
+      <el-form :model="editForm" label-width="80px">
+        <el-form-item label="歌单名称"><el-input v-model="editForm.name" maxlength="50" /></el-form-item>
+        <el-form-item label="描述"><el-input v-model="editForm.description" type="textarea" :rows="3" /></el-form-item>
+        <el-form-item label="公开">
+          <el-switch v-model="editForm.isPublic" />
+          <span class="edit-hint">{{ editForm.isPublic ? '所有人可在广场看到并收藏' : '仅自己可见' }}</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -54,6 +74,7 @@ import api from '../api'
 import { useUserStore } from '../stores/user'
 import { usePlayerStore } from '../stores/player'
 import SongGrid from '../components/SongGrid.vue'
+import GenCover from '../components/GenCover.vue'
 import { playlistSongs, resolveFileUrl } from '../utils'
 
 const route = useRoute()
@@ -65,6 +86,9 @@ const songs = ref([])
 const favorited = ref(false)
 const loading = ref(false)
 const loadError = ref('')
+const editVisible = ref(false)
+const saving = ref(false)
+const editForm = ref({ name: '', description: '', isPublic: true })
 
 const isOwner = computed(() =>
   userStore.isLogin && playlist.value && Number(playlist.value.userId) === Number(userStore.userId))
@@ -107,6 +131,34 @@ async function removeSong(row) {
   await api.removePlaylistSong(route.params.id, row.id)
   message.success('已移除')
   load()
+}
+
+function openEdit() {
+  const p = playlist.value || {}
+  editForm.value = {
+    name: p.name || '',
+    description: p.description || '',
+    isPublic: !!p.isPublic
+  }
+  editVisible.value = true
+}
+
+async function saveEdit() {
+  if (!editForm.value.name.trim()) return message.warning('歌单名称不能为空')
+  saving.value = true
+  try {
+    await api.updatePlaylist(route.params.id, {
+      name: editForm.value.name.trim(),
+      description: editForm.value.description,
+      isPublic: editForm.value.isPublic
+    })
+    editVisible.value = false
+    message.success('歌单已更新')
+    window.dispatchEvent(new Event('md-playlists-changed'))
+    load()
+  } finally {
+    saving.value = false
+  }
 }
 
 watch(() => route.params.id, load, { immediate: true })
@@ -169,6 +221,21 @@ watch(() => route.params.id, load, { immediate: true })
   color: var(--text-muted);
   font-size: 13.5px;
   margin: 8px 0 16px;
+}
+.creator {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.edit-hint {
+  margin-left: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 .actions {
   display: flex;

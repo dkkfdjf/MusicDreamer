@@ -28,9 +28,24 @@
       </el-tab-pane>
 
       <el-tab-pane label="全量歌曲" name="songs">
+        <div class="song-stats">
+          <span>共 <b>{{ songTotal }}</b> 首</span>
+          <span class="divider">·</span>
+          <span>累计播放 <b class="play-count">{{ totalPlays }}</b> 次</span>
+          <span class="hint">（飙升榜/热歌榜即由播放数据驱动）</span>
+        </div>
         <el-table :data="allSongs" v-loading="loading">
           <el-table-column prop="id" label="ID" width="70" />
           <el-table-column prop="name" label="歌名" min-width="140" />
+          <el-table-column prop="singerNickname" label="歌手" width="110" />
+          <el-table-column label="播放" width="90" align="center">
+            <template #default="{ row }">
+              <span class="play-count">{{ row.playCount ?? 0 }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="收藏" width="70" align="center">
+            <template #default="{ row }">{{ row.collectCount ?? 0 }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
               <el-tag :type="(SONG_STATUS[row.status] || {}).type">{{ (SONG_STATUS[row.status] || {}).label }}</el-tag>
@@ -115,7 +130,7 @@
 
       <el-tab-pane label="工具与模型" name="tools">
         <el-card class="tools-card">
-          <template #header>媒体工具（yt-dlp 保持最新可应对 B 站风控）</template>
+          <template #header>媒体工具（没有就下载，有就更新；全部安装到 tools/bin/）</template>
           <el-table :data="toolsList">
             <el-table-column prop="name" label="工具" width="120" />
             <el-table-column prop="version" label="本地版本" min-width="140" />
@@ -125,28 +140,16 @@
                 <el-tag :type="row.alive ? 'success' : 'danger'">{{ row.alive ? '健康' : '不可用' }}</el-tag>
               </template>
             </el-table-column>
-          </el-table>
-          <el-button type="primary" style="margin-top:10px" @click="updateYtdlp">检查并更新 yt-dlp</el-button>
-        </el-card>
-        <el-card class="tools-card">
-          <template #header>whisper 模型（下载需确认，勿静默拉大文件）</template>
-          <el-table :data="models">
-            <el-table-column prop="key" label="规格" width="100" />
-            <el-table-column prop="label" label="定位" width="130" />
-            <el-table-column prop="sizeText" label="体积" width="110" />
-            <el-table-column label="状态" width="110">
+            <el-table-column label="操作" width="200" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.isCurrent ? 'success' : row.downloaded ? 'info' : 'warning'">
-                  {{ row.isCurrent ? '使用中' : row.downloaded ? '已下载' : '未下载' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="220" align="center">
-              <template #default="{ row }">
-                <el-button v-if="!row.downloaded" size="small" type="primary" @click="modelDownload(row)">下载</el-button>
-                <el-button v-if="row.downloaded && !row.isCurrent" size="small" @click="modelUse(row)">切换</el-button>
-                <el-button v-if="row.downloaded && !row.isCurrent" size="small" type="danger" plain
-                  @click="modelDelete(row)">删除</el-button>
+                <el-button size="small" :type="row.alive ? 'default' : 'primary'"
+                  :loading="toolInstall.running && toolInstall.name === row.name"
+                  @click="installTool(row)">
+                  <span v-if="toolInstall.running && toolInstall.name === row.name">
+                    {{ toolInstall.stage || '进行中…' }}
+                  </span>
+                  <span v-else>{{ row.alive ? '更新' : '下载' }}</span>
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -176,7 +179,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { message, confirm } from '../utils/feedback'
 import api from '../api'
 import { listOf, SONG_STATUS, fmtTime, resolveFileUrl } from '../utils'
@@ -187,11 +190,12 @@ const tab = ref('audit')
 const loading = ref(false)
 const auditSongs = ref([])
 const allSongs = ref([])
+const songTotal = ref(0)
+const totalPlays = ref(0)
 const users = ref([])
 const applications = ref([])
 const reports = ref([])
 const toolsList = ref([])
-const models = ref([])
 
 const editVisible = ref(false)
 const editSong = ref(null)
@@ -269,13 +273,17 @@ async function load() {
   loading.value = true
   try {
     if (tab.value === 'audit') auditSongs.value = listOf(await api.songAdminList({ status: 1, page: 1, size: 50 }))
-    if (tab.value === 'songs') allSongs.value = listOf(await api.songAdminList({ page: 1, size: 100 }))
+    if (tab.value === 'songs') {
+      const r = await api.songAdminList({ page: 1, size: 100 })
+      allSongs.value = listOf(r)
+      songTotal.value = r?.total ?? 0
+      totalPlays.value = r?.totalPlays ?? 0
+    }
     if (tab.value === 'users') users.value = listOf(await api.userList({ page: 1, size: 100 }))
     if (tab.value === 'singers') applications.value = listOf(await api.singerApplications({ status: 1 }))
     if (tab.value === 'reports') reports.value = listOf(await api.reportList({ status: 1, page: 1, size: 50 }))
     if (tab.value === 'tools') {
       toolsList.value = listOf(await api.toolsStatus())
-      models.value = listOf(await api.models())
     }
   } finally {
     loading.value = false
@@ -345,27 +353,38 @@ async function handleReport(row, pass, action) {
   load()
 }
 
-async function updateYtdlp() {
-  await api.updateYtdlp()
-  message.success('更新任务已提交，稍后刷新查看')
+// 工具安装/更新进度：提交任务后轮询到结束，按钮上直接显示阶段与百分比
+const toolInstall = ref({ running: false, name: '', stage: '' })
+let toolInstallTimer = null
+
+function stopToolInstall() {
+  if (toolInstallTimer) clearInterval(toolInstallTimer)
+  toolInstallTimer = null
+  toolInstall.value = { running: false, name: '', stage: '' }
 }
 
-async function modelDownload(row) {
-  await api.modelDownload(row.key)
-  message.success('模型下载任务已提交')
+async function installTool(row) {
+  const r = await api.toolInstall(row.name)
+  if (!r.data || !r.data.taskId) return
+  toolInstall.value = { running: true, name: row.name, stage: '已提交…' }
+  stopToolInstall()
+  toolInstallTimer = setInterval(async () => {
+    try {
+      const t = (await api.mediaTask(r.data.taskId)).data || {}
+      toolInstall.value.stage = t.stage || toolInstall.value.stage
+      if (t.status === 'SUCCESS') {
+        stopToolInstall()
+        message.success(t.error || t.stage || (row.name + ' 已就绪'))
+        load()
+      } else if (t.status === 'FAILED' || t.status === 'CANCELLED') {
+        stopToolInstall()
+        message.error('安装失败：' + (t.error || t.stage || '未知原因'))
+      }
+    } catch (e) { /* 轮询失败静默等下一轮 */ }
+  }, 1500)
 }
 
-async function modelUse(row) {
-  await api.modelUse(row.key)
-  message.success('已切换，下次任务生效')
-  load()
-}
-
-async function modelDelete(row) {
-  await api.modelDelete(row.key)
-  message.success('已删除')
-  load()
-}
+onUnmounted(stopToolInstall)
 
 onMounted(load)
 </script>
@@ -373,4 +392,9 @@ onMounted(load)
 <style scoped>
 .admin { min-height: 60vh; }
 .tools-card { margin-bottom: 14px; }
+.play-count { font-family: var(--font-mono); font-weight: 700; color: var(--accent); }
+.song-stats { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; font-size: 13px; color: var(--text-muted); }
+.song-stats b { font-family: var(--font-mono); color: var(--text); }
+.song-stats .divider { opacity: 0.5; }
+.song-stats .hint { font-size: 12px; opacity: 0.65; }
 </style>

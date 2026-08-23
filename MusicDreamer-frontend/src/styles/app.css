@@ -15,22 +15,65 @@
 .weui-toast {
   pointer-events: none !important;
 }
-/* 确认/告知框不再钉死屏幕正中：改从顶部滑下（视觉重心在上三分之一处，
-   与顶部提示一族一致），遮罩拦截保持不变 */
+/* 确认/告知框回到屏幕正中（用户要求），入场改为缩放淡入；
+   居中用 transform 定位，入场动画改用独立 translate 属性，二者不冲突。
+   注意：weui 关闭靠给 .weui-animate-fade-out 换动画并等 animationend 移除 DOM，
+   因此入场动画只能挂在 fade-in 类上、且排除 fade-out 状态——否则关闭动画被顶掉、弹窗永久卡死。 */
 .weui-dialog {
-  top: 12% !important;
-  transform: translate(0, 0) !important;
-  animation: md-dialog-drop 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+  top: 50% !important;
+  transform: translate(0, -50%) !important;
 }
-@keyframes md-dialog-drop {
+.weui-dialog.weui-animate-fade-in:not(.weui-animate-fade-out) {
+  animation: md-dialog-pop 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes md-dialog-pop {
   from {
     opacity: 0;
-    transform: translateY(-18px);
+    translate: 0 -14px;
+    scale: 0.97;
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    translate: 0 0;
+    scale: 1;
   }
+}
+/* 弹窗按钮：明确的可点击反馈（hover 抬起 + 主按钮品牌色填充） */
+.weui-dialog__btn {
+  position: relative;
+  border-radius: 10px !important;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, translate 0.18s ease;
+}
+.weui-dialog__btn:hover {
+  background: rgba(255, 107, 26, 0.1);
+  color: var(--accent, #ff6b1a) !important;
+  translate: 0 -1px;
+}
+.weui-dialog__btn:active {
+  translate: 0 0;
+  background: rgba(255, 107, 26, 0.18);
+}
+.weui-dialog__btn_primary {
+  font-weight: 700;
+}
+.weui-dialog__btn_primary:hover {
+  background: var(--accent, #ff6b1a);
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(255, 107, 26, 0.35);
+}
+/* 轻提示：顶部居中的长方形横条（登录成功/已退出等），完全穿透不挡操作 */
+.weui-toast {
+  top: 0 !important;
+  bottom: auto !important;
+  left: 50% !important;
+  margin-top: 18px !important;
+  transform: translate(-50%, 0) !important;
+  min-width: 300px !important;
+  max-width: min(82vw, 520px) !important;
+  width: auto !important;
+  border-radius: 12px !important;
+  padding: 13px 26px !important;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* ---------- 基础 ---------- */
@@ -363,6 +406,16 @@ select {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+/* 内容行：左=路由视图（.content），右=内嵌歌词栏（LyricsPanel）；
+   歌词栏展开时以 flex 挤入而非浮层遮盖，窄屏时自身降级为覆盖层 */
+.content-row {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
 }
 
 .content {

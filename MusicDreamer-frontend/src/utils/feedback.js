@@ -2,12 +2,12 @@
 // weui.js 为 UMD 模块，Vite 下按默认导入使用其 toast/topTips/alert/confirm。
 import weui from 'weui.js'
 
-// 轻提示（成功/一般）：底部 toast，1.5s 自动消失
+// 轻提示（成功/一般）：顶部横条 toast，1.5s 自动消失（样式见 app.css .weui-toast）
 export function toast(message, opts = {}) {
   weui.toast(message, { duration: 1500, ...opts })
 }
 
-// 顶部条提示（警告/错误）：更醒目，2s
+// 顶部条提示（警告/错误）：黄色横条，2s
 export function topTips(message, opts = {}) {
   weui.topTips(message, { duration: 2000, ...opts })
 }

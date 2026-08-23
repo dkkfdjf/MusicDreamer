@@ -162,6 +162,19 @@ export const api = {
   getPlaylist: (id) => get(`/playlist/${id}`),
   favoritePlaylist: (id) => post(`/playlist/${id}/favorite`),
   unfavoritePlaylist: (id) => del(`/playlist/${id}/favorite`),
+
+  // ---------- 专辑（镜像歌单：公开匿名可看、收藏=引用、主人管理） ----------
+  albumCreate: (data) => post('/album/create', data),
+  albumDetail: (id) => get(`/album/${id}`),
+  albumDelete: (id) => del(`/album/${id}`),
+  albumAddSong: (id, songId) => post(`/album/${id}/song/${songId}`),
+  albumRemoveSong: (id, songId) => del(`/album/${id}/song/${songId}`),
+  albumFavorite: (id) => post(`/album/${id}/favorite`),
+  albumUnfavorite: (id) => del(`/album/${id}/favorite`),
+  publicAlbums: (params) => get('/album/public/list', params, { noRedirect: true }),
+  // 音乐库专辑面板为辅助数据：失败静默回空（如网关未升级时不应打扰页面）
+  myAlbums: () => get('/album/my', null, { noRedirect: true }),
+  favAlbums: () => get('/album/favorites', null, { noRedirect: true }),
   // 公开歌单广场：匿名可看，失败静默（老网关未放行时不影响页面）
   publicPlaylists: (params) => get('/playlist/public/list', params, { noRedirect: true }),
 
@@ -188,15 +201,14 @@ export const api = {
   mediaTask: (id) => get(`/media/task/${id}`),
   mediaCancel: (id) => post(`/media/task/${id}/cancel`),
   mediaTranscribe: (songId) => post(`/media/transcribe/${songId}`),
+  // 一键获取歌词：在线歌词库优先（自动校准/加时间轴），无命中本地 AI 转写
+  lyricsFetch: (songId) => post(`/media/lyrics/fetch/${songId}`),
   mediaLoudness: (songId) => post(`/media/loudness/${songId}`),
 
   // ---------- 媒体工具/模型（管理员） ----------
   toolsStatus: () => get('/media/tools/status'),
-  updateYtdlp: () => post('/media/tools/update-ytdlp'),
-  models: () => get('/media/models'),
-  modelDownload: (key) => post(`/media/models/${key}/download`),
-  modelUse: (key) => post(`/media/models/${key}/use`),
-  modelDelete: (key) => post(`/media/models/${key}/delete`),
+  // 通用工具安装/更新：没有就下载，有就更新（tools.manifest.json → tools/bin/）
+  toolInstall: (tool) => post(`/media/tools/install/${tool}`),
 
   // ---------- 配置 ----------
   settingAll: () => get('/setting/all'),

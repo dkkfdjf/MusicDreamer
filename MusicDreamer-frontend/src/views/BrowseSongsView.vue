@@ -2,60 +2,100 @@
   <div class="browse-songs" v-loading="loading">
     <header class="content-header">
       <div>
-        <div class="eyebrow">Library</div>
-        <h1>{{ keyword ? `“${keyword}” 的结果` : '所有歌曲' }}</h1>
+        <div class="eyebrow">Discover · 广场</div>
+        <h1>{{ headerTitle }}</h1>
       </div>
-      <span class="count">{{ total }} 首</span>
+      <span class="count">{{ headerCount }}</span>
     </header>
 
-    <!-- 公开歌单广场：所有用户公开的歌单在此可见（与全部歌曲同页整合） -->
-    <section v-if="!keyword && plaza.length" class="plaza" aria-label="公开歌单">
-      <div class="plaza-head">
-        <h2>公开歌单</h2>
-        <span class="plaza-sub">来自社区的创作</span>
+    <!-- 广场三页签：歌曲 / 歌单 / 专辑 -->
+    <div class="plaza-tabs" role="tablist" aria-label="广场分类">
+      <button v-for="t in PLAZA_TABS" :key="t.key" class="plaza-tab" role="tab"
+        :aria-selected="String(plazaTab === t.key)" @click="switchPlazaTab(t.key)">
+        {{ t.label }}
+      </button>
+    </div>
+
+    <!-- 歌曲：原全部歌曲（搜索/曲风/网格） -->
+    <template v-if="plazaTab === 'songs'">
+      <div v-if="!keyword" class="filters" role="group" aria-label="曲风筛选">
+        <button class="chip" :aria-pressed="!style" @click="selectStyle('')">全部</button>
+        <button v-for="item in STYLES" :key="item" class="chip" :aria-pressed="style === item"
+          @click="selectStyle(item)">{{ item }}</button>
       </div>
-      <div class="plaza-grid">
-        <router-link v-for="p in plaza" :key="p.id" :to="'/playlist/' + p.id" class="pl-card"
-          :title="p.name">
+
+      <SongGrid v-if="songs.length" :songs="songs" @play="play" />
+
+      <div v-if="!songs.length && !loading" class="empty-state">
+        <h3>{{ keyword ? '没有找到匹配的歌曲' : '暂无可播放歌曲' }}</h3>
+        <p>{{ keyword ? '换个关键词试试' : '稍后再来看看' }}</p>
+      </div>
+
+      <el-pagination v-if="total > size" v-model:current-page="page" :page-size="size" :total="total"
+        layout="prev, pager, next" class="pager" @current-change="load" />
+    </template>
+
+    <!-- 歌单：公开歌单广场（别人的创作，点击进详情可收藏） -->
+    <template v-else-if="plazaTab === 'playlists'">
+      <div class="plaza-grid wide">
+        <router-link v-for="p in plazaAll" :key="p.id" :to="'/playlist/' + p.id" class="pl-card" :title="p.name">
           <div class="pl-cover">
-            <img v-if="p.coverUrl" :src="resolveFileUrl(p.coverUrl)" alt="" loading="lazy"
-              @error="p.coverUrl = ''">
-            <span v-else class="pl-ph" :class="'c' + ((Number(p.id || 0) % 6) + 1)">♪</span>
+            <img v-if="p.coverUrl" :src="resolveFileUrl(p.coverUrl)" alt="" loading="lazy" @error="p.coverUrl = ''">
+            <GenCover v-else :name="p.name" :id="p.id" glyph="♪" />
           </div>
           <b class="pl-name">{{ p.name }}</b>
-          <span class="pl-count">{{ p.songCount || 0 }} 首</span>
+          <span class="pl-count">{{ p.creatorName ? p.creatorName + ' · ' : '' }}{{ p.songCount || 0 }} 首</span>
         </router-link>
       </div>
-    </section>
+      <div v-if="!plazaAll.length && !plazaLoading" class="empty-state">
+        <h3>还没有公开歌单</h3>
+        <p>把歌单设为公开，就会出现在这里与大家分享。</p>
+      </div>
+    </template>
 
-    <div v-if="!keyword" class="filters" role="group" aria-label="曲风筛选">
-      <button class="chip" :aria-pressed="!style" @click="selectStyle('')">全部</button>
-      <button v-for="item in STYLES" :key="item" class="chip" :aria-pressed="style === item"
-        @click="selectStyle(item)">{{ item }}</button>
-    </div>
-
-    <SongGrid v-if="songs.length" :songs="songs" @play="play" />
-
-    <div v-if="!songs.length && !loading" class="empty-state">
-      <h3>{{ keyword ? '没有找到匹配的歌曲' : '暂无可播放歌曲' }}</h3>
-      <p>{{ keyword ? '换个关键词试试' : '稍后再来看看' }}</p>
-    </div>
-
-    <el-pagination v-if="total > size" v-model:current-page="page" :page-size="size" :total="total"
-      layout="prev, pager, next" class="pager" @current-change="load" />
+    <!-- 专辑：公开专辑广场 -->
+    <template v-else>
+      <div class="plaza-grid wide">
+        <router-link v-for="a in albumPlaza" :key="a.id" :to="'/album/' + a.id" class="pl-card" :title="a.name">
+          <div class="pl-cover">
+            <img v-if="a.coverUrl" :src="resolveFileUrl(a.coverUrl)" alt="" loading="lazy" @error="a.coverUrl = ''">
+            <GenCover v-else :name="a.name" :id="a.id" glyph="♫" />
+          </div>
+          <b class="pl-name">{{ a.name }}</b>
+          <span class="pl-count">{{ a.singerName || '歌手' }} · {{ a.songCount || 0 }} 首</span>
+        </router-link>
+      </div>
+      <div v-if="!albumPlaza.length && !plazaLoading" class="empty-state">
+        <h3>还没有公开专辑</h3>
+        <p>歌手发布的专辑会出现在这里。</p>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+// 广场 = 发现别人的公开内容：歌曲 / 歌单 / 专辑 三页签。
+// 歌曲页签沿用原"全部歌曲"（搜索/曲风/分页）；歌单、专辑为公开广场网格。
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import SongGrid from '../components/SongGrid.vue'
+import GenCover from '../components/GenCover.vue'
 import { pageOf, listOf, resolveFileUrl, STYLES } from '../utils'
 import { usePlayerStore } from '../stores/player'
 
 const route = useRoute()
+const router = useRouter()
 const playerStore = usePlayerStore()
+
+const PLAZA_TABS = [
+  { key: 'songs', label: '歌曲' },
+  { key: 'playlists', label: '歌单' },
+  { key: 'albums', label: '专辑' }
+]
+const plazaTab = ref('songs')
+const plazaLoading = ref(false)
+
 const songs = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -63,7 +103,18 @@ const size = ref(24)
 const style = ref('')
 const keyword = ref('')
 const loading = ref(false)
-const plaza = ref([])
+const plazaAll = ref([])
+const albumPlaza = ref([])
+
+const headerTitle = computed(() => {
+  if (plazaTab.value === 'songs') return keyword.value ? `“${keyword.value}” 的结果` : '全部歌曲'
+  return plazaTab.value === 'playlists' ? '公开歌单' : '公开专辑'
+})
+const headerCount = computed(() => {
+  if (plazaTab.value === 'songs') return `${total.value} 首`
+  if (plazaTab.value === 'playlists') return `${plazaAll.value.length} 张歌单`
+  return `${albumPlaza.value.length} 张专辑`
+})
 
 function play(index) {
   playerStore.playQueue(songs.value, index)
@@ -75,15 +126,36 @@ function selectStyle(value) {
   load()
 }
 
-// 公开歌单广场：失败静默（老网关未放行匿名时不影响本页）
-async function loadPlaza() {
+function switchPlazaTab(key) {
+  plazaTab.value = key
+  router.replace({ query: { ...route.query, tab: key } })
+  if (key === 'playlists') loadPlazaAll()
+  if (key === 'albums') loadAlbumPlaza()
+}
+
+async function loadPlazaAll() {
+  plazaLoading.value = true
   try {
-    plaza.value = listOf(await api.publicPlaylists({ page: 1, size: 8 }))
+    const data = await api.publicPlaylists({ page: 1, size: 60 })
+    plazaAll.value = listOf(data)
   } catch (e) {
-    plaza.value = []
+    plazaAll.value = []
+  } finally {
+    plazaLoading.value = false
   }
 }
-loadPlaza()
+
+async function loadAlbumPlaza() {
+  plazaLoading.value = true
+  try {
+    const data = await api.publicAlbums({ page: 1, size: 60 })
+    albumPlaza.value = listOf(data)
+  } catch (e) {
+    albumPlaza.value = []
+  } finally {
+    plazaLoading.value = false
+  }
+}
 
 async function load() {
   loading.value = true
@@ -99,12 +171,21 @@ async function load() {
   }
 }
 
+watch(() => route.query.tab, (t) => {
+  if (PLAZA_TABS.some((x) => x.key === t)) plazaTab.value = t
+}, { immediate: true })
+
 watch([() => route.query.keyword, () => route.query.style], ([keywordQuery, styleQuery]) => {
   keyword.value = typeof keywordQuery === 'string' ? keywordQuery.trim() : ''
   style.value = keyword.value ? '' : (typeof styleQuery === 'string' ? styleQuery : '')
   page.value = 1
-  load()
+  // 仅搜索词存在时才强制回歌曲页签；纯浏览歌单/专辑时保持当前页签
+  if (keyword.value) plazaTab.value = 'songs'
+  if (plazaTab.value === 'songs') load()
 }, { immediate: true })
+
+if (plazaTab.value === 'playlists') loadPlazaAll()
+if (plazaTab.value === 'albums') loadAlbumPlaza()
 </script>
 
 <style scoped>
@@ -115,12 +196,37 @@ watch([() => route.query.keyword, () => route.query.style], ([keywordQuery, styl
 h1 { font-family: var(--font-display); font-size: 26px; font-weight: 700; }
 .count { color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; }
 
-/* ---------- 公开歌单广场 ---------- */
-.plaza { margin-bottom: 26px; }
-.plaza-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
-.plaza-head h2 { font-size: 17px; font-weight: 700; }
-.plaza-sub { font-size: 12.5px; color: var(--text-faint); }
+/* 广场页签 */
+.plaza-tabs {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.plaza-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.plaza-tab:hover { color: var(--text); background: var(--surface-2); }
+.plaza-tab[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+/* 广场网格（歌单/专辑页签用更宽的卡片） */
 .plaza-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 14px; }
+.plaza-grid.wide { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
 .pl-card {
   display: flex; flex-direction: column; gap: 7px; padding: 9px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -132,7 +238,7 @@ h1 { font-family: var(--font-display); font-size: 26px; font-weight: 700; }
 .pl-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pl-ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; color: rgba(255, 255, 255, 0.6); }
 .pl-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pl-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.pl-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .chip { min-height: 34px; padding: 6px 13px; border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-muted); font-size: 13px; }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }

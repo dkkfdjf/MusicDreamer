@@ -3,6 +3,9 @@
     @update:model-value="(v) => $emit('update:modelValue', v)">
     <el-form :model="form" label-width="80px">
       <el-form-item label="歌名"><el-input v-model="form.name" /></el-form-item>
+      <el-form-item v-if="isAdmin" label="歌手名">
+        <el-input v-model="form.singerName" placeholder="导入作品的原始歌手名，清空则用账号昵称" />
+      </el-form-item>
       <el-form-item label="专辑"><el-input v-model="form.album" /></el-form-item>
       <el-form-item label="风格">
         <el-select v-model="form.style" style="width:180px">
@@ -28,6 +31,7 @@ import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import { STYLES, LANGUAGES } from '../utils'
+import { useUserStore } from '../stores/user'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -35,7 +39,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'saved'])
 
-const form = ref({ name: '', album: '', style: '', language: '' })
+const userStore = useUserStore()
+const isAdmin = userStore.role === 2
+const form = ref({ name: '', album: '', style: '', language: '', singerName: '' })
 const saving = ref(false)
 
 watch(
@@ -47,12 +53,13 @@ watch(
       name: props.song.name || '',
       album: props.song.album || '',
       style: props.song.style || '',
-      language: props.song.language || ''
+      language: props.song.language || '',
+      singerName: props.song.singerName || ''
     }
     try {
       const d = await api.songDetail(props.song.id)
       if (d) {
-        form.value = { name: d.name || '', album: d.album || '', style: d.style || '', language: d.language || '' }
+        form.value = { name: d.name || '', album: d.album || '', style: d.style || '', language: d.language || '', singerName: d.singerName || '' }
       }
     } catch (e) { /* 列表字段兜底 */ }
   }

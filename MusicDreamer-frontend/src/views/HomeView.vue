@@ -53,6 +53,14 @@
             {{ t.label }}
           </button>
         </div>
+        <!-- 曲风细分：在榜单/推荐之下再按歌曲类型筛选 -->
+        <div class="chips sub" role="group" aria-label="曲风">
+          <button class="chip" :class="{ ghost: true }" :aria-pressed="String(!style)" @click="selectStyle('')">全部曲风</button>
+          <button v-for="item in STYLES" :key="item" class="chip ghost" :aria-pressed="String(style === item)"
+            @click="selectStyle(item)">
+            {{ item }}
+          </button>
+        </div>
       </section>
     </template>
 
@@ -126,7 +134,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import api from '../api'
 import { useUserStore } from '../stores/user'
 import { usePlayerStore, getAudioEl } from '../stores/player'
-import { listOf, resolveFileUrl, singerName } from '../utils'
+import { listOf, resolveFileUrl, singerName, STYLES } from '../utils'
 import { revealStagger, prefersReduced } from '../utils/motion'
 import { getAnalyser } from '../utils/audioAnalyser'
 import ReportDialog from '../components/ReportDialog.vue'
@@ -141,6 +149,7 @@ const tabs = [
   { key: 'rise', label: '飙升榜' }
 ]
 const tab = ref('reco')
+const style = ref('')
 const songs = ref([])
 const loading = ref(false)
 const myPlaylists = ref([])
@@ -272,6 +281,14 @@ const currentTitle = '热门歌曲'
 
 function switchTab(key) {
   tab.value = key
+  // 榜单/推荐是全站口径，切回时清空曲风筛选
+  style.value = ''
+  loadTab()
+}
+
+function selectStyle(item) {
+  style.value = item
+  tab.value = 'style'
   loadTab()
 }
 
@@ -291,7 +308,10 @@ async function addToPlaylist(pid, songId) {
 async function loadTab() {
   loading.value = true
   try {
-    if (tab.value === 'reco') {
+    if (tab.value === 'style') {
+      // 曲风筛选：沿用分类浏览接口（按播放数倒序）
+      songs.value = listOf(await api.searchByStyle({ style: style.value || undefined, page: 1, size: 20 }))
+    } else if (tab.value === 'reco') {
       let reco = []
       if (userStore.isLogin) {
         try {
@@ -615,6 +635,21 @@ watch(reportTarget, (v) => { reportVisible.value = !!v })
   border-color: var(--accent);
   color: var(--accent-text);
   font-weight: 700;
+}
+
+/* 曲风行：更小更轻的次级胶囊，与榜单主行拉开层级 */
+.chips.sub {
+  margin-top: 10px;
+  gap: 8px;
+}
+.chip.ghost {
+  padding: 5px 14px;
+  font-size: 12.5px;
+}
+.chip.ghost[aria-pressed="true"] {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ---------- 歌曲卡片：见 components/SongGrid.vue（上下结构） ---------- */

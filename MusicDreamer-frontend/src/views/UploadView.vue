@@ -18,6 +18,9 @@
               </el-upload>
             </el-form-item>
             <el-form-item label="歌名"><el-input v-model="form.name" style="width:320px" /></el-form-item>
+            <el-form-item v-if="isAdmin" label="歌手名">
+              <el-input v-model="form.singerName" style="width:320px" placeholder="导入他人作品时填原始歌手名，留空则用你的昵称" />
+            </el-form-item>
             <el-form-item label="专辑"><el-input v-model="form.album" style="width:320px" /></el-form-item>
             <el-form-item label="风格">
               <el-select v-model="form.style" style="width:180px">
@@ -53,6 +56,9 @@
             <el-form-item label="来源链接">
               <el-input v-model="link.url" placeholder="支持 B 站 / YouTube 视频链接" style="width:560px" />
             </el-form-item>
+            <el-form-item v-if="isAdmin" label="歌手名">
+              <el-input v-model="link.singerName" style="width:320px" placeholder="导入成功后自动回填到歌曲（留空用你的昵称）" />
+            </el-form-item>
             <el-form-item label="选项">
               <el-checkbox v-model="link.wantSubtitle">尝试下载字幕</el-checkbox>
               <el-checkbox v-model="link.wantTranscribe">AI 转写歌词（需先下载模型）</el-checkbox>
@@ -83,6 +89,9 @@
         <el-table :data="mine" v-loading="mineLoading">
           <el-table-column prop="id" label="ID" width="70" />
           <el-table-column prop="name" label="歌名" min-width="160" />
+          <el-table-column label="播放" width="80" align="center">
+            <template #default="{ row }">{{ row.playCount ?? 0 }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="(SONG_STATUS[row.status] || {}).type">{{ (SONG_STATUS[row.status] || {}).label || row.status }}</el-tag>
@@ -110,9 +119,12 @@ import { ref, onBeforeUnmount } from 'vue'
 import { message } from '../utils/feedback'
 import api from '../api'
 import { listOf, SONG_STATUS, STYLES, LANGUAGES, isTaskTerminal } from '../utils'
+import { useUserStore } from '../stores/user'
 
+const userStore = useUserStore()
+const isAdmin = userStore.role === 2
 const tab = ref('file')
-const form = ref({ name: '', album: '', style: '流行', language: '国语' })
+const form = ref({ name: '', album: '', style: '流行', language: '国语', singerName: '' })
 const fileList = ref([])
 const picked = ref(null)
 const coverList = ref([])
@@ -121,10 +133,11 @@ const pickedCover = ref(null)
 const pickedLyric = ref(null)
 const uploading = ref(false)
 
-const link = ref({ url: '', wantSubtitle: true, wantTranscribe: false })
+const link = ref({ url: '', singerName: '', wantSubtitle: true, wantTranscribe: false })
 const task = ref(null)
 const running = ref(false)
 let timer = null
+let singerApplied = false
 
 const mine = ref([])
 const mineLoading = ref(false)
@@ -183,7 +196,7 @@ async function submitFile() {
       duration: await readDuration(picked.value)
     })
     message.success('已提交，等待管理员审核')
-    form.value = { name: '', album: '', style: '流行', language: '国语' }
+    form.value = { name: '', album: '', style: '流行', language: '国语', singerName: '' }
     fileList.value = []
     picked.value = null
     coverList.value = []
@@ -224,6 +237,14 @@ async function poll() {
     clearInterval(timer)
     timer = null
     running.value = false
+    // 管理员导入他人作品：任务成功后把填写的原始歌手名回填到歌曲
+    const name = (link.value.singerName || '').trim()
+    if (task.value.status === 'SUCCESS' && task.value.musicId && name && !singerApplied) {
+      singerApplied = true
+      api.songEdit(task.value.musicId, { singerName: name })
+        .then(() => message.success(`歌手名已回填：${name}`))
+        .catch(() => message.warning('歌手名回填失败，可在首页编辑歌曲信息补填'))
+    }
     loadMine()
   }
 }
