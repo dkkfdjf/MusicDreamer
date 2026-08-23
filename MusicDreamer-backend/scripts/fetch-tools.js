@@ -4,7 +4,7 @@
  *
  * 用法：
  *   node scripts/fetch-tools.js            # 拉取 yt-dlp / ffmpeg / whisper-cli 到 tools/
- *   node scripts/fetch-tools.js --models   # 追加拉取 whisper 模型（默认 base）到 tools/models/
+ *   node scripts/fetch-tools.js --models   # 追加拉取 whisper 模型（默认 small）到 data/models/
  *   node scripts/fetch-tools.js --models small,medium
  *
  * 约定：tools.manifest.json（进 Git）锁定来源与校验；tools/ 目录（二进制）不进 Git。
@@ -17,7 +17,9 @@ const { Readable } = require("stream");
 
 const ROOT = path.resolve(__dirname, "..");
 const TOOLS_DIR = path.join(ROOT, "tools");
-const MODELS_DIR = path.join(TOOLS_DIR, "models");
+// 模型必须放 data/models/（StorageService.modelsDir() 的首选探测位置），
+// 放 tools/models/ 只会在 data/models 不存在时才被兜底读到
+const MODELS_DIR = path.join(ROOT, "data", "models");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "tools.manifest.json"), "utf8"));
 
 const PLATFORM = process.platform === "win32" ? "win" : "linux";
@@ -61,6 +63,21 @@ async function unzip(file, targetDir) {
   fs.rmSync(file);
 }
 
+// 在解压树里递归找指定文件名（zip 内部目录结构不固定）
+function findFile(root, name) {
+  const direct = path.join(root, name);
+  if (fs.existsSync(direct)) return direct;
+  let entries = [];
+  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return null; }
+  for (const d of entries) {
+    if (d.isDirectory()) {
+      const r = findFile(path.join(root, d.name), name);
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
 async function fetchTools() {
   fs.mkdirSync(TOOLS_DIR, { recursive: true });
   for (const t of manifest.tools) {
@@ -69,14 +86,24 @@ async function fetchTools() {
     console.log(`== ${t.name} (${t.version})`);
     const dest = path.join(TOOLS_DIR, spec.target);
     if (spec.unzip) {
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      const already = (spec.binary || []).some(b => fs.existsSync(path.join(TOOLS_DIR, b)));
+      // 统一布局：解压到临时目录，只把 binary 列表里的文件挑进 tools/bin/，
+      // 其余（ffplay / bench / test 等无关产物）不进项目
+      const already = (spec.binary || []).every(b =>
+        fs.existsSync(path.join(TOOLS_DIR, "bin", b)));
       if (already) { console.log("  已存在，跳过"); continue; }
       const zip = path.join(TOOLS_DIR, `${t.name}.zip`);
       await download(spec.url, zip, spec.minBytes);
-      await unzip(zip, TOOLS_DIR);
+      const tmp = path.join(TOOLS_DIR, `_unzip_${t.name}`);
+      await unzip(zip, tmp);
+      fs.mkdirSync(path.join(TOOLS_DIR, "bin"), { recursive: true });
+      for (const b of spec.binary || []) {
+        const src = findFile(tmp, b);
+        if (src) fs.copyFileSync(src, path.join(TOOLS_DIR, "bin", b));
+        else console.log(`  警告：压缩包中未找到 ${b}`);
+      }
+      fs.rmSync(tmp, { recursive: true, force: true });
     } else {
-      if (fs.existsSync(dest)) { console.log("  已存在，跳通"); continue; }
+      if (fs.existsSync(dest)) { console.log("  已存在，跳过"); continue; }
       await download(spec.url, dest, spec.minBytes);
       if (PLATFORM === "linux") fs.chmodSync(dest, 0o755);
     }
@@ -105,7 +132,7 @@ async function fetchModels(keys) {
   try {
     if (args.includes("--models")) {
       const idx = args.indexOf("--models");
-      const keys = args[idx + 1] ? args[idx + 1].split(",") : ["base"];
+      const keys = args[idx + 1] ? args[idx + 1].split(",") : ["small"];
       await fetchModels(keys);
     } else {
       await fetchTools();

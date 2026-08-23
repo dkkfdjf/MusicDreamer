@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.musicdreamer.common.api.ErrorCode;
 import com.musicdreamer.common.auth.AuthContext;
 import com.musicdreamer.common.exception.BizException;
@@ -34,9 +35,13 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 歌曲管理：提交/播放/详情/榜单/编辑/重提/我的/管理列表/审核/下架/上架/版本。
@@ -46,6 +51,9 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class SongService {
+
+    // findAndRegisterModules 自动带上 JSR310（LocalDateTime）等模块，裸 ObjectMapper 转换会抛 IllegalArgumentException
+    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
     /** 歌曲状态常量。 */
     public static final int STATUS_TAKEN_DOWN = 0;
@@ -85,6 +93,9 @@ public class SongService {
         song.setLyricUrl(dto.getLyricUrl());
         song.setFileFormat(dto.getFileFormat());
         song.setSourceUrl(dto.getSourceUrl());
+        if (StringUtils.hasText(dto.getSingerName())) {
+            song.setSingerName(dto.getSingerName().trim());
+        }
         song.setPlayCount(0L);
         song.setCollectCount(0);
         // 管理员提交免审直接发布（自己审自己没意义）；歌手提交仍走审核流程
@@ -156,6 +167,7 @@ public class SongService {
         if (dto.getLanguage() != null) uw.set(Song::getLanguage, dto.getLanguage());
         if (dto.getCoverUrl() != null) uw.set(Song::getCoverUrl, dto.getCoverUrl());
         if (StringUtils.hasText(dto.getLyricUrl())) uw.set(Song::getLyricUrl, dto.getLyricUrl());
+        if (dto.getSingerName() != null) uw.set(Song::getSingerName, dto.getSingerName().trim());
         songMapper.update(null, uw);
         operationLogService.record("EDIT", "PUT",
                 Map.of("songId", id, "singerId", song.getSingerId()));
@@ -185,7 +197,7 @@ public class SongService {
         return result;
     }
 
-    /** 管理端全量列表（联 user 带歌手昵称）。 */
+    /** 管理端全量列表（联 user 带歌手昵称；附当前过滤条件下的播放总数汇总）。 */
     public Map<String, Object> adminList(int page, int size, Integer status, String keyword) {
         AuthContext.requireAdmin();
         Page<SongManageVO> pager = new Page<>(page, size);
@@ -193,6 +205,7 @@ public class SongService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", pager.getTotal());
         result.put("songs", pager.getRecords());
+        result.put("totalPlays", songMapper.sumPlayCount(status, keyword));
         return result;
     }
 
@@ -299,11 +312,35 @@ public class SongService {
         return mustGet(id);
     }
 
-    public List<Song> internalBatch(List<Long> ids) {
+    public List<Map<String, Object>> internalBatch(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return new ArrayList<>();
         }
-        return songMapper.selectBatchIds(ids);
+        List<Song> songs = songMapper.selectBatchIds(ids);
+        if (songs.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 联一次用户表补 singerName：歌单/专辑详情拼装歌曲行时直接可读（旧消费方按 key 取值，向后兼容）
+        Set<Long> singerIds = songs.stream()
+                .map(Song::getSingerId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> names = new HashMap<>();
+        if (!singerIds.isEmpty()) {
+            for (Map<String, Object> row : userMapper.selectNamesByIds(new ArrayList<>(singerIds))) {
+                Object id = row.get("id");
+                Object name = row.get("name");
+                if (id instanceof Number && name != null) {
+                    names.put(((Number) id).longValue(), String.valueOf(name));
+                }
+            }
+        }
+        List<Map<String, Object>> result = new ArrayList<>(songs.size());
+        for (Song song : songs) {
+            Map<String, Object> row = MAPPER.convertValue(song, new TypeReference<Map<String, Object>>() {});
+            row.put("singerName", StringUtils.hasText(song.getSingerName())
+                    ? song.getSingerName() : names.get(song.getSingerId()));
+            result.add(row);
+        }
+        return result;
     }
 
     public Song internalBySource(String url) {
@@ -332,6 +369,9 @@ public class SongService {
         song.setCoverUrl(dto.getCoverUrl());
         song.setFileFormat(dto.getFileFormat());
         song.setSourceUrl(dto.getSourceUrl());
+        if (StringUtils.hasText(dto.getSingerName())) {
+            song.setSingerName(dto.getSingerName().trim());
+        }
         song.setPlayCount(0L);
         song.setCollectCount(0);
         // 与手动上传(submit)一致：操作者是管理员时直接发布，免去人工审核

@@ -47,6 +47,8 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     private static final String[] OPTIONAL_AUTH = {
             "/api/v1/playlist/public/**",
             "/api/v1/playlist/*",
+            "/api/v1/album/public/**",
+            "/api/v1/album/*",
     };
 
     /** 需要 role=2（管理员）。 */

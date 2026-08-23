@@ -62,6 +62,8 @@ public class SettingsService {
             return defaultLufs;
         }
     }
-    public String whisperModel() { return get("whisper_model", "base"); }
+    // 转写模型固定 small：一般人只装一个模型，small 的中日文识别质量
+    // 直接决定歌词校准/加时间轴的准确性，不提供多规格选择
+    public String whisperModel() { return "small"; }
     public String storageRoot() { return get("storage_root", defaultStorageRoot); }
 }

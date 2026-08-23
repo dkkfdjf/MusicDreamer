@@ -31,4 +31,7 @@ public class SongSubmitDTO {
 
     /** 下载来源链接，非空时查重。 */
     private String sourceUrl;
+
+    /** 原始歌手名（管理员从外站导入他人作品时填写，展示优先于登录账号昵称）。 */
+    private String singerName;
 }

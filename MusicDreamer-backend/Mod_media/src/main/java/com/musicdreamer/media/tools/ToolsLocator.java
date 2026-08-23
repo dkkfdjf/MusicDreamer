@@ -42,13 +42,31 @@ public class ToolsLocator {
         this.registry = registry;
     }
 
-    /** 按逻辑名定位可执行文件绝对路径；找不到返回 null。 */
+    /**
+     * 按逻辑名定位可执行文件绝对路径；找不到返回 null。
+     *
+     * 标准布局（推荐，手动或 fetch-tools 均可维护）：
+     *   backend/tools/bin/   —— 全部媒体工具统一放这里（yt-dlp.exe / ffmpeg.exe /
+     *                           ffprobe.exe / whisper-cli.exe + 依赖 dll / ocr.ps1）
+     * 兼容布局（历史遗留，仅回退探测）：
+     *   backend/tools/           根目录散放
+     *   backend/tools/ffmpeg/bin fetch-tools 解压的 gyan 版 ffmpeg
+     *   backend/tools/whisper/   fetch-tools 解压的 whisper.cpp（含大量无关 exe）
+     * 最后回退系统 PATH。
+     */
     public String locate(String tool) {
-        if (cached.containsKey(tool)) {
-            return cached.get(tool);
+        String c = cached.get(tool);
+        if (c != null) {
+            // PATH 兜底的裸命令名直接复用；绝对路径需验证仍存在——
+            // 工具目录重整/文件被移动后，旧缓存会指向已删除路径，
+            // 曾因此导致运行中的服务"下载全挂、版本不显示"
+            if (!c.contains("\\") && !c.contains("/")) return c;
+            if (Files.isRegularFile(Paths.get(c))) return c;
+            cached.remove(tool);
         }
         String found = probe(tool);
-        cached.put(tool, found);
+        // ConcurrentHashMap 不接受 null 值；未找到不缓存，下次再探测
+        if (found != null) cached.put(tool, found);
         return found;
     }
 
@@ -60,10 +78,10 @@ public class ToolsLocator {
         }
         dirs.add(Paths.get("tools").toAbsolutePath().normalize());
         dirs.add(Paths.get("../tools").toAbsolutePath().normalize());
-        // ffmpeg 在 tools/ffmpeg/bin 下；whisper 在 tools/whisper 下
         List<String> names = candidates(tool);
+        // bin/ 最优先（标准统一布局），其余为兼容历史散放
         for (Path dir : dirs) {
-            for (String sub : new String[]{"", "bin/", "ffmpeg/bin/", "whisper/"}) {
+            for (String sub : new String[]{"bin/", "", "ffmpeg/bin/", "whisper/"}) {
                 for (String name : names) {
                     Path p = dir.resolve(sub + name);
                     if (Files.isRegularFile(p)) {

@@ -8,6 +8,7 @@ import com.musicdreamer.media.service.StorageService;
 import com.musicdreamer.media.service.TaskManager;
 import com.musicdreamer.media.tools.ToolsLocator;
 import com.musicdreamer.media.tools.ToolsMgmtJob;
+import com.musicdreamer.media.tools.ToolsStatusCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -36,28 +37,23 @@ public class ToolsController {
     private final TaskManager tasks;
     private final SettingsService settings;
     private final StorageService storage;
+    private final ToolsStatusCache statusCache;
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(10)).build();
 
+    // 转写模型只提供 small：中日文识别质量直接决定歌词校准/加时间轴的
+    // 准确性，多规格选择对普通用户只是负担（占磁盘 + 选错质量差）
     private static final List<Map<String, String>> MODELS = List.of(
-            Map.of("key", "tiny", "label", "试水", "sizeText", "约75MB"),
-            Map.of("key", "base", "label", "默认推荐", "sizeText", "约142MB"),
-            Map.of("key", "small", "label", "高精度", "sizeText", "约466MB"),
-            Map.of("key", "medium", "label", "最高精度（很慢）", "sizeText", "约1.5GB"));
-
-    /** 探测缓存：起 4 个进程 + 访问 GitHub 太重，结果缓存 5 分钟让管理后台秒开。 */
-    private volatile List<Map<String, Object>> statusCache;
-    private volatile long statusCacheAt;
-    private volatile String latestCache;
-    private volatile long latestCacheAt;
+            Map.of("key", "small", "label", "标准（唯一规格）", "sizeText", "约466MB"));
 
     @GetMapping("/tools/status")
     public Mess toolsStatus() {
         AuthContext.requireAdmin();
         long now = System.currentTimeMillis();
-        if (statusCache != null && now - statusCacheAt < 300_000) {
-            return Mess.ok(statusCache);
+        List<Map<String, Object>> cached = statusCache.status();
+        if (cached != null && now - statusCache.statusAt() < 300_000) {
+            return Mess.ok(cached);
         }
         List<Map<String, Object>> list = new ArrayList<>();
         for (String tool : List.of(ToolsLocator.YT_DLP, ToolsLocator.FFMPEG,
@@ -79,9 +75,21 @@ public class ToolsController {
             item.put("latest", tool.equals(ToolsLocator.YT_DLP) ? githubLatest() : null);
             list.add(item);
         }
-        statusCache = list;
-        statusCacheAt = now;
+        statusCache.putStatus(list);
         return Mess.ok(list);
+    }
+
+    /** 通用安装/更新：没有就下载，有就更新（读 tools.manifest.json 装到 tools/bin/）。 */
+    @PostMapping("/tools/install/{tool}")
+    public Mess toolInstall(@PathVariable String tool) {
+        AuthContext.requireAdmin();
+        if (!List.of(ToolsLocator.YT_DLP, ToolsLocator.FFMPEG,
+                ToolsLocator.FFPROBE, ToolsLocator.WHISPER).contains(tool)) {
+            return Mess.fail(5003, "未知工具");
+        }
+        MediaTask t = tasks.submit(TaskManager.TOOL_INSTALL, null, null,
+                AuthContext.getUserId(), "安装工具 " + tool);
+        return Mess.ok(Map.of("taskId", t.getId()));
     }
 
     @PostMapping("/tools/update-ytdlp")
@@ -124,11 +132,8 @@ public class ToolsController {
     @PostMapping("/models/{key}/use")
     public Mess modelUse(@PathVariable String key) {
         AuthContext.requireAdmin();
-        if (MODELS.stream().noneMatch(m -> m.get("key").equals(key))) {
-            return Mess.fail(5003, "未知模型规格");
-        }
-        if (!Files.isRegularFile(storage.modelsDir().resolve("ggml-" + key + ".bin"))) {
-            return Mess.fail(5003, "模型尚未下载，请先下载再切换");
+        if (!"small".equals(key)) {
+            return Mess.fail(5003, "仅支持 small 模型");
         }
         try {
             Path marker = storage.modelsDir().resolve("current.txt");
@@ -141,24 +146,17 @@ public class ToolsController {
 
     @PostMapping("/models/{key}/delete")
     public Mess modelDelete(@PathVariable String key) {
-        AuthContext.requireAdmin();
-        if (key.equals(settings.whisperModel())) {
-            return Mess.fail(2007, "当前使用中的模型不允许删除");
-        }
-        try {
-            Files.deleteIfExists(storage.modelsDir().resolve("ggml-" + key + ".bin"));
-        } catch (Exception e) {
-            return Mess.fail(1000, "删除失败：" + e.getMessage());
-        }
-        return Mess.ok();
+        // small 是唯一规格且恒为当前使用，不提供删除
+        return Mess.fail(2007, "唯一模型不允许删除");
     }
 
     /** GitHub 最新版比对（yt-dlp 版本号即日期）。成功缓存 1 小时；国内访问常超时，失败 10 分钟内不重试。 */
     private String githubLatest() {
         long now = System.currentTimeMillis();
-        if (latestCacheAt > 0
-                && now - latestCacheAt < (latestCache == null ? 600_000 : 3_600_000)) {
-            return latestCache;
+        String latest = statusCache.latest();
+        if (statusCache.latestAt() > 0
+                && now - statusCache.latestAt() < (latest == null ? 600_000 : 3_600_000)) {
+            return latest;
         }
         try {
             HttpRequest req = HttpRequest.newBuilder(
@@ -172,14 +170,14 @@ public class ToolsController {
             if (i >= 0) {
                 int s = body.indexOf('"', i + 11) + 1;
                 int e = body.indexOf('"', s);
-                latestCache = body.substring(s, e);
-                latestCacheAt = now;
-                return latestCache;
+                latest = body.substring(s, e);
+                statusCache.putLatest(latest);
+                return latest;
             }
         } catch (Exception e) {
             log.warn("github latest check failed: {}", e.getMessage());
         }
-        latestCacheAt = now;
-        return latestCache;
+        statusCache.putLatest(latest);
+        return latest;
     }
 }

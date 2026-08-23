@@ -18,4 +18,7 @@ public class SongEditDTO {
 
     /** 歌词文件地址（OCR 识别结果存为 lrc 后回填）。 */
     private String lyricUrl;
+
+    /** 原始歌手名（导入他人作品时可改；传空串清除回落账号昵称）。 */
+    private String singerName;
 }

@@ -16,17 +16,17 @@ import java.util.List;
 public interface PlayHistoryMapper extends BaseMapper<PlayHistory> {
 
     /** 最近播放：按歌曲分组取最大播放时间倒序（去重）。 */
-    @Select("SELECT s.id AS songId, s.name, COALESCE(u.nickname, u.username) AS singer, "
+    @Select("SELECT s.id AS songId, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, "
             + "s.album, s.cover_url AS coverUrl, s.duration, MAX(p.played_at) AS lastPlayedAt "
             + "FROM play_history p JOIN song s ON s.id = p.song_id LEFT JOIN user u ON u.id = s.singer_id "
             + "WHERE p.user_id = #{userId} AND p.play_complete = 1 AND s.status = 2 "
-            + "GROUP BY s.id, s.name, u.nickname, u.username, s.album, s.cover_url, s.duration "
+            + "GROUP BY s.id, s.name, u.nickname, u.username, s.singer_name, s.album, s.cover_url, s.duration "
             + "ORDER BY lastPlayedAt DESC LIMIT #{limit}")
     List<RecentVO> selectRecent(@Param("userId") Long userId, @Param("limit") int limit);
 
     /** 播放明细分页（join 歌曲与歌手）。 */
     @Select("SELECT p.id, p.song_id AS songId, s.name AS songName, s.cover_url AS coverUrl, "
-            + "COALESCE(u.nickname, u.username) AS singer, p.play_duration AS playDuration, "
+            + "COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, p.play_duration AS playDuration, "
             + "p.play_complete AS playComplete, p.device_type AS deviceType, p.played_at AS playedAt "
             + "FROM play_history p JOIN song s ON s.id = p.song_id LEFT JOIN user u ON u.id = s.singer_id "
             + "WHERE p.user_id = #{userId} ORDER BY p.played_at DESC LIMIT #{offset}, #{size}")
@@ -37,11 +37,11 @@ public interface PlayHistoryMapper extends BaseMapper<PlayHistory> {
     long countHistory(@Param("userId") Long userId);
 
     /** 周榜（rise）：近 7 天按歌曲计数倒序，仅已发布。 */
-    @Select("SELECT s.id, s.name, COALESCE(u.nickname, u.username) AS singer, s.singer_id AS singerId, "
+    @Select("SELECT s.id, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, s.singer_id AS singerId, "
             + "s.album, s.style, s.duration, s.cover_url AS coverUrl, COUNT(*) AS weekPlayCount "
             + "FROM play_history p JOIN song s ON s.id = p.song_id LEFT JOIN user u ON u.id = s.singer_id "
             + "WHERE s.status = 2 AND p.played_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) "
-            + "GROUP BY s.id, s.name, u.nickname, u.username, s.singer_id, s.album, s.style, s.duration, s.cover_url "
+            + "GROUP BY s.id, s.name, u.nickname, u.username, s.singer_name, s.singer_id, s.album, s.style, s.duration, s.cover_url "
             + "ORDER BY weekPlayCount DESC LIMIT #{limit}")
     List<SongCardVO> selectRise(@Param("limit") int limit);
 

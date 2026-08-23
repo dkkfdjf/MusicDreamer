@@ -28,4 +28,7 @@ public class PlaylistVO {
 
     /** 收藏时间（仅“我收藏的”列表有值）。 */
     private LocalDateTime favoriteTime;
+
+    /** 创建者昵称（公开广场/收藏列表展示"by 谁"）。 */
+    private String creatorName;
 }

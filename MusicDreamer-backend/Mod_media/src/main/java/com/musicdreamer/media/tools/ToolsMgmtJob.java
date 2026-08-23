@@ -1,5 +1,6 @@
 package com.musicdreamer.media.tools;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.musicdreamer.media.entity.MediaTask;
 import com.musicdreamer.media.exec.ProcessExecutor;
 import com.musicdreamer.media.service.StorageService;
@@ -17,9 +18,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
-/** TOOL_UPDATE 与 MODEL_DOWNLOAD 任务（设计 10.3）：.part 流式 + 体积校验 + 原子替换。 */
+/**
+ * 工具/模型管理任务：TOOL_INSTALL（通用安装/更新，读 tools.manifest.json，
+ * 全部装到 tools/bin/）、TOOL_UPDATE（yt-dlp 快速更新，保留）、MODEL_DOWNLOAD。
+ * 可靠性口径：.part 流式 + 体积校验 + 原子替换 + 完成后清探测缓存。
+ */
 @Slf4j
 @Component
 public class ToolsMgmtJob {
@@ -28,18 +37,136 @@ public class ToolsMgmtJob {
     private final ProcessExecutor executor;
     private final ToolsLocator toolsLocator;
     private final StorageService storage;
+    private final ToolsStatusCache statusCache;
+    private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(15)).build();
 
     public ToolsMgmtJob(TaskManager tasks, ProcessExecutor executor,
-                        ToolsLocator toolsLocator, StorageService storage) {
+                        ToolsLocator toolsLocator, StorageService storage,
+                        ToolsStatusCache statusCache) {
         this.tasks = tasks;
         this.executor = executor;
         this.toolsLocator = toolsLocator;
         this.storage = storage;
+        this.statusCache = statusCache;
         tasks.runnerLocator().register(TaskManager.TOOL_UPDATE, this::toolUpdate);
         tasks.runnerLocator().register(TaskManager.MODEL_DOWNLOAD, this::modelDownload);
+        tasks.runnerLocator().register(TaskManager.TOOL_INSTALL, this::toolInstall);
+    }
+
+    /**
+     * 通用工具安装/更新：按 tools.manifest.json 拉取（GitHub 直链 + ghproxy
+     * 镜像回退），zip 包按 binary 清单挑文件解到 tools/bin/，单文件原子替换。
+     * ffprobe 归属 ffmpeg 包。完成后清 locate/状态缓存，管理页即时反映。
+     */
+    public void toolInstall(MediaTask task) {
+        String tool = task.getStage() == null ? "" : task.getStage().replace("安装工具 ", "");
+        // 逻辑名 -> manifest 名（ffprobe 随 ffmpeg 包分发）
+        String manifestName = switch (tool) {
+            case ToolsLocator.FFMPEG, ToolsLocator.FFPROBE -> "ffmpeg";
+            case ToolsLocator.WHISPER -> "whisper-cli";
+            default -> tool;
+        };
+        try {
+            Path toolsDir = toolsDir();
+            Map<String, Object> entry = manifestTool(toolsDir, manifestName);
+            if (entry == null) {
+                tasks.finish(task.getId(), "FAILED", "manifest 中没有工具 " + manifestName);
+                return;
+            }
+            boolean win = System.getProperty("os.name", "").toLowerCase().contains("win");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> plat = (Map<String, Object>) entry.get(win ? "win" : "linux");
+            if (plat == null) {
+                tasks.finish(task.getId(), "FAILED", "manifest 缺少 " + (win ? "win" : "linux") + " 配置（Linux 请走容器内 apt）");
+                return;
+            }
+            String url = String.valueOf(plat.get("url"));
+            long minBytes = ((Number) plat.getOrDefault("minBytes", 1_000_000)).longValue();
+            // 源列表：直链 -> 显式 mirror -> github 代理镜像
+            List<String> urls = new ArrayList<>(List.of(url));
+            if (plat.get("mirror") != null) urls.add(1, String.valueOf(plat.get("mirror")));
+            for (String p : new String[]{"https://ghproxy.net/", "https://gh-proxy.com/", "https://ghproxy.com/"}) {
+                if (url.contains("github.com") && !url.contains("ghproxy")) urls.add(p + url);
+            }
+
+            boolean unzip = Boolean.TRUE.equals(plat.get("unzip"));
+            Path binDir = toolsDir.resolve("bin");
+            Files.createDirectories(binDir);
+            Path dest = binDir.resolve("." + manifestName + "-install" + (unzip ? ".zip" : "") + ".part");
+
+            tasks.progress(task.getId(), 5, "正在下载 " + manifestName + "…");
+            if (!downloadAny(urls, dest, minBytes, task.getId(), 5, 70)) {
+                tasks.finish(task.getId(), "FAILED", "下载失败（直链与镜像均不可用）");
+                return;
+            }
+            if (unzip) {
+                tasks.progress(task.getId(), 75, "解压安装到 tools/bin/…");
+                List<String> binary = (List<String>) plat.getOrDefault("binary", List.of());
+                unzipPick(dest, binDir, binary);
+                Files.deleteIfExists(dest);
+                if (binary.stream().anyMatch(b -> !Files.isRegularFile(binDir.resolve(b)))) {
+                    tasks.finish(task.getId(), "FAILED", "压缩包中未找到全部预期文件");
+                    return;
+                }
+            } else {
+                String target = String.valueOf(plat.getOrDefault("target", "bin/" + manifestName + ".exe"));
+                Path out = toolsDir.resolve(target);
+                Files.createDirectories(out.getParent());
+                Files.move(dest, out, StandardCopyOption.REPLACE_EXISTING);
+            }
+            toolsLocator.invalidate();
+            statusCache.invalidate();
+            String version = toolsLocator.execVersion(
+                    toolsLocator.locate(tool), toolsLocator.probeArgs(tool));
+            String note = version == null ? "已安装（版本探测待重启进程后生效）"
+                    : "已安装：" + version.split("\n")[0];
+            tasks.progress(task.getId(), 100, note);
+            tasks.finish(task.getId(), "SUCCESS", note);
+        } catch (Exception e) {
+            log.warn("tool install {} failed", tool, e);
+            tasks.finish(task.getId(), "FAILED", "安装失败：" + e.getMessage());
+        }
+    }
+
+    /** 读 tools.manifest.json（与 tools/ 同目录），返回 tools[] 里 name 匹配的条目。 */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> manifestTool(Path toolsDir, String name) throws Exception {
+        for (Path p : new Path[]{
+                toolsDir.getParent().resolve("tools.manifest.json"),
+                Paths.get("tools.manifest.json"),
+                Paths.get("../tools.manifest.json")}) {
+            if (!Files.isRegularFile(p)) continue;
+            Map<String, Object> root = json.readValue(p.toFile(), Map.class);
+            for (Object o : (List<Object>) root.get("tools")) {
+                Map<String, Object> m = (Map<String, Object>) o;
+                if (name.equals(m.get("name"))) return m;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /** 从 zip 中按文件名（取条目路径最后一段匹配）挑出 binary 清单内的文件解到 bin/。 */
+    private void unzipPick(Path zip, Path binDir, List<String> binary) throws Exception {
+        try (ZipInputStream zin = new ZipInputStream(Files.newInputStream(zip))) {
+            ZipEntry e;
+            byte[] buf = new byte[64 * 1024];
+            while ((e = zin.getNextEntry()) != null) {
+                if (e.isDirectory()) continue;
+                String base = e.getName().replace('\\', '/');
+                base = base.substring(base.lastIndexOf('/') + 1);
+                if (!binary.contains(base)) continue;
+                Path out = binDir.resolve(base);
+                Files.deleteIfExists(out);
+                try (var os = Files.newOutputStream(out)) {
+                    int n;
+                    while ((n = zin.read(buf)) > 0) os.write(buf, 0, n);
+                }
+            }
+        }
     }
 
     /** yt-dlp 自动更新：下载 .part（失败切镜像）-> >5MB 校验 -> 原子替换 -> --version 验证（失败回滚）。 */
@@ -75,6 +202,7 @@ public class ToolsMgmtJob {
             }
             Files.deleteIfExists(bak);
             toolsLocator.invalidate();
+            statusCache.invalidate();
             tasks.finish(task.getId(), "SUCCESS", null);
             log.info("yt-dlp updated to {}", version);
         } catch (Exception e) {

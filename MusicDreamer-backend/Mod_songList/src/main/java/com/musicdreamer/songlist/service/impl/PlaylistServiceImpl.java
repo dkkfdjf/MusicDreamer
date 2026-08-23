@@ -13,6 +13,7 @@ import com.musicdreamer.songlist.entity.UserFavoritePlaylist;
 import com.musicdreamer.songlist.mapper.PlaylistMapper;
 import com.musicdreamer.songlist.mapper.PlaylistSongMapper;
 import com.musicdreamer.songlist.mapper.UserFavoritePlaylistMapper;
+import com.musicdreamer.songlist.mapper.UserMapper;
 import com.musicdreamer.songlist.service.PlaylistService;
 import com.musicdreamer.songlist.service.SongRemoteService;
 import com.musicdreamer.songlist.vo.PlaylistDetailVO;
@@ -43,15 +44,18 @@ public class PlaylistServiceImpl implements PlaylistService {
     private final PlaylistSongMapper playlistSongMapper;
     private final UserFavoritePlaylistMapper favoriteMapper;
     private final SongRemoteService songRemoteService;
+    private final UserMapper userMapper;
 
     public PlaylistServiceImpl(PlaylistMapper playlistMapper,
                                PlaylistSongMapper playlistSongMapper,
                                UserFavoritePlaylistMapper favoriteMapper,
-                               SongRemoteService songRemoteService) {
+                               SongRemoteService songRemoteService,
+                               UserMapper userMapper) {
         this.playlistMapper = playlistMapper;
         this.playlistSongMapper = playlistSongMapper;
         this.favoriteMapper = favoriteMapper;
         this.songRemoteService = songRemoteService;
+        this.userMapper = userMapper;
     }
 
     // ---------- 歌单 CRUD ----------
@@ -228,6 +232,7 @@ public class PlaylistServiceImpl implements PlaylistService {
         vo.setSongCount(songVOs.size());
         vo.setFavored(userId != null && isFavored(userId, id));
         vo.setSongs(songVOs);
+        vo.setCreatorName(userNames(List.of(p.getUserId())).get(p.getUserId()));
         return vo;
     }
 
@@ -270,8 +275,14 @@ public class PlaylistServiceImpl implements PlaylistService {
         result.put("created", created.stream()
                 .map(p -> toVO(p, counts.getOrDefault(p.getId(), 0L), null))
                 .collect(Collectors.toList()));
+        Map<Long, String> creators = userNames(favorited.stream()
+                .map(Playlist::getUserId).collect(Collectors.toList()));
         result.put("favorited", favorited.stream()
-                .map(p -> toVO(p, counts.getOrDefault(p.getId(), 0L), favoriteTimeByPlaylist.get(p.getId())))
+                .map(p -> {
+                    PlaylistVO vo = toVO(p, counts.getOrDefault(p.getId(), 0L), favoriteTimeByPlaylist.get(p.getId()));
+                    vo.setCreatorName(creators.get(p.getUserId()));
+                    return vo;
+                })
                 .collect(Collectors.toList()));
         return result;
     }
@@ -293,6 +304,8 @@ public class PlaylistServiceImpl implements PlaylistService {
         Page<Playlist> pager = playlistMapper.selectPage(new Page<>(cur, pageSize), qw);
         List<Long> ids = pager.getRecords().stream().map(Playlist::getId).collect(Collectors.toList());
         Map<Long, Long> counts = songCounts(ids);
+        Map<Long, String> creators = userNames(pager.getRecords().stream()
+                .map(Playlist::getUserId).collect(Collectors.toList()));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", pager.getTotal());
@@ -300,7 +313,11 @@ public class PlaylistServiceImpl implements PlaylistService {
         result.put("page", pager.getCurrent());
         result.put("size", pager.getSize());
         result.put("records", pager.getRecords().stream()
-                .map(p -> toVO(p, counts.getOrDefault(p.getId(), 0L), null))
+                .map(p -> {
+                    PlaylistVO vo = toVO(p, counts.getOrDefault(p.getId(), 0L), null);
+                    vo.setCreatorName(creators.get(p.getUserId()));
+                    return vo;
+                })
                 .collect(Collectors.toList()));
         return result;
     }
@@ -381,6 +398,20 @@ public class PlaylistServiceImpl implements PlaylistService {
         vo.setSongCount(songCount == null ? 0L : songCount);
         vo.setFavoriteTime(favoriteTime);
         return vo;
+    }
+
+    /** 批量取用户昵称（歌单作者展示）。 */
+    private Map<Long, String> userNames(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (Map<String, Object> row : userMapper.selectNamesByIds(ids)) {
+            if (row.get("id") instanceof Number && row.get("name") != null) {
+                names.put(((Number) row.get("id")).longValue(), String.valueOf(row.get("name")));
+            }
+        }
+        return names;
     }
 
     private boolean isFavored(Long userId, Long playlistId) {

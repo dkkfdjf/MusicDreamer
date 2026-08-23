@@ -20,6 +20,9 @@ public class Song {
     /** 歌手用户ID。 */
     private Long singerId;
 
+    /** 导入歌曲的原始歌手名（管理员从外站导入时填写，展示时优先于注册歌手昵称）。 */
+    private String singerName;
+
     private String album;
 
     private String style;

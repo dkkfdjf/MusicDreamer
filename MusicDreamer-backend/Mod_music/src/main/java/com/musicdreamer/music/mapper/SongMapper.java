@@ -16,18 +16,18 @@ import java.util.List;
 /** 歌曲表 Mapper：简单 CRUD 走 BaseMapper，join user/聚合查询走注解 SQL。 */
 public interface SongMapper extends BaseMapper<Song> {
 
-    String CARD_COLS = "s.id, s.name, COALESCE(u.nickname, u.username) AS singer, "
+    String CARD_COLS = "s.id, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, "
             + "s.singer_id AS singerId, s.album, s.style, s.duration, s.cover_url AS coverUrl, s.play_count AS playCount";
 
     /** 播放视图（join user 取歌手昵称）。 */
-    @Select("SELECT s.id AS songId, s.name, COALESCE(u.nickname, u.username) AS singer, "
+    @Select("SELECT s.id AS songId, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, "
             + "s.singer_id AS singerId, s.album, s.file_url AS fileUrl, s.cover_url AS coverUrl, "
             + "s.lyric_url AS lyricUrl, s.duration, s.volume_gain AS volumeGain, s.file_format AS fileFormat "
             + "FROM song s LEFT JOIN user u ON u.id = s.singer_id WHERE s.id = #{id}")
     SongPlayVO selectPlayById(@Param("id") Long id);
 
     /** 详情视图（含热计数与状态）。 */
-    @Select("SELECT s.id AS songId, s.name, COALESCE(u.nickname, u.username) AS singer, "
+    @Select("SELECT s.id AS songId, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, "
             + "s.singer_id AS singerId, s.album, s.style, s.language, s.duration, "
             + "s.file_url AS fileUrl, s.cover_url AS coverUrl, s.lyric_url AS lyricUrl, s.file_format AS fileFormat, "
             + "s.play_count AS playCount, s.collect_count AS collectCount, s.volume_gain AS volumeGain, "
@@ -43,13 +43,15 @@ public interface SongMapper extends BaseMapper<Song> {
     /** 搜索歌曲：歌名或歌手名匹配（仅已发布）。 */
     @Select("SELECT " + CARD_COLS + " FROM song s LEFT JOIN user u ON u.id = s.singer_id "
             + "WHERE s.status = 2 AND (s.name LIKE CONCAT('%', #{kw}, '%') "
-            + "OR u.username LIKE CONCAT('%', #{kw}, '%') OR u.nickname LIKE CONCAT('%', #{kw}, '%')) "
+            + "OR u.username LIKE CONCAT('%', #{kw}, '%') OR u.nickname LIKE CONCAT('%', #{kw}, '%') "
+            + "OR s.singer_name LIKE CONCAT('%', #{kw}, '%')) "
             + "ORDER BY s.play_count DESC, s.id DESC LIMIT #{offset}, #{size}")
     List<SongCardVO> searchCards(@Param("kw") String kw, @Param("offset") long offset, @Param("size") int size);
 
     @Select("SELECT COUNT(*) FROM song s LEFT JOIN user u ON u.id = s.singer_id "
             + "WHERE s.status = 2 AND (s.name LIKE CONCAT('%', #{kw}, '%') "
-            + "OR u.username LIKE CONCAT('%', #{kw}, '%') OR u.nickname LIKE CONCAT('%', #{kw}, '%'))")
+            + "OR u.username LIKE CONCAT('%', #{kw}, '%') OR u.nickname LIKE CONCAT('%', #{kw}, '%') "
+            + "OR s.singer_name LIKE CONCAT('%', #{kw}, '%'))")
     long countSearch(@Param("kw") String kw);
 
     /** 分类浏览：风格/语言组合过滤。 */
@@ -101,11 +103,11 @@ public interface SongMapper extends BaseMapper<Song> {
                                          @Param("limit") int limit);
 
     /** 管理列表（我的上传/管理端全量）：联 user 取歌手昵称，动态过滤状态/关键字/上传者。 */
-    @Select("<script>SELECT s.id, s.name, COALESCE(u.nickname, u.username) AS singerNickname, "
+    @Select("<script>SELECT s.id, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singerNickname, "
             + "s.singer_id AS singerId, s.album, s.style, s.language, s.duration, s.status, "
             + "s.source_url AS sourceUrl, s.reject_reason AS rejectReason, s.cover_url AS coverUrl, "
             + "s.file_url AS fileUrl, s.lyric_url AS lyricUrl, s.file_format AS fileFormat, "
-            + "s.play_count AS playCount, s.collect_count AS collectCount, s.create_time AS createTime "
+            + "s.singer_name AS singerName, s.play_count AS playCount, s.collect_count AS collectCount, s.create_time AS createTime "
             + "FROM song s LEFT JOIN user u ON u.id = s.singer_id "
             + "<where>"
             + "<if test='singerId != null'> s.singer_id = #{singerId}</if>"
@@ -114,6 +116,13 @@ public interface SongMapper extends BaseMapper<Song> {
             + "</where> ORDER BY s.create_time DESC, s.id DESC</script>")
     Page<SongManageVO> selectManagePage(Page<SongManageVO> page, @Param("singerId") Long singerId,
                                         @Param("status") Integer status, @Param("keyword") String keyword);
+
+    /** 管理端播放总数汇总（与全量列表同过滤条件）。 */
+    @Select("<script>SELECT COALESCE(SUM(s.play_count), 0) FROM song s "
+            + "<where><if test='status != null'> s.status = #{status}</if>"
+            + "<if test='keyword != null and keyword != \"\"'> AND s.name LIKE CONCAT('%', #{keyword}, '%')</if>"
+            + "</where></script>")
+    long sumPlayCount(@Param("status") Integer status, @Param("keyword") String keyword);
 
     /** 播放热计数 +1（与明细同事务，设计 6.3 节）。 */
     @Update("UPDATE song SET play_count = play_count + 1 WHERE id = #{id}")

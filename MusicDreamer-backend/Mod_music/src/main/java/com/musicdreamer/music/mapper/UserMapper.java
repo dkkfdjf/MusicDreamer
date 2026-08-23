@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.util.Map;
 
 /** 用户表只读 Mapper（join 用，歌手搜索）。 */
 public interface UserMapper {
@@ -12,6 +13,11 @@ public interface UserMapper {
     /** 按 ID 查角色（导入管线判断操作者是否管理员：0 听众 1 歌手 2 管理员）。 */
     @Select("SELECT role FROM user WHERE id = #{id}")
     Integer selectRole(@Param("id") Long id);
+
+    /** 批量查展示名（昵称缺失回退用户名），歌单/专辑详情拼装歌手名用。 */
+    @Select("<script>SELECT id, COALESCE(NULLIF(nickname, ''), username) AS name FROM user WHERE id IN "
+            + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
+    List<Map<String, Object>> selectNamesByIds(@Param("ids") List<Long> ids);
 
     String SINGER_COLS = "u.id, COALESCE(u.nickname, u.username) AS nickname, u.avatar, sp.fans_count AS fansCount";
 

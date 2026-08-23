@@ -2,6 +2,12 @@ server:
   port: 8008
 
 spring:
+  flyway:
+    enabled: true
+    # 现有库已由 init.sql 手工建表：baseline 后从 V1 起应用（V1 为幂等建表）
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
   application:
     name: songListService8008
   datasource:

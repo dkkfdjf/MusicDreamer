@@ -35,8 +35,10 @@ public class TaskManager {
     public static final String TRANSCRIBE = "TRANSCRIBE";
     public static final String LOUDNESS = "LOUDNESS";
     public static final String SUBTITLE = "SUBTITLE";
+    public static final String LYRICS_FETCH = "LYRICS_FETCH";
     public static final String MODEL_DOWNLOAD = "MODEL_DOWNLOAD";
     public static final String TOOL_UPDATE = "TOOL_UPDATE";
+    public static final String TOOL_INSTALL = "TOOL_INSTALL";
 
     private final MediaTaskMapper mapper;
     private final ProcessExecutor executor;

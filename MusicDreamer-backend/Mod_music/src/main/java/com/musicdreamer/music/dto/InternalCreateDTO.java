@@ -26,4 +26,7 @@ public class InternalCreateDTO {
     private String fileFormat;
 
     private String sourceUrl;
+
+    /** 原始歌手名（下载任务带入，展示优先于账号昵称）。 */
+    private String singerName;
 }

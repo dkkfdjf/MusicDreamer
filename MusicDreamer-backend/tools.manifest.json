@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "媒体处理工具清单：fetch-tools.js 按此拉取到项目 tools/ 目录，版本全队锁定一致。二进制不进 Git。",
+  "description": "媒体处理工具清单：fetch-tools.js 按此拉取，全部统一安装到 tools/bin/（单一目录布局）。二进制不进 Git。",
   "tools": [
     {
       "name": "yt-dlp",
@@ -8,12 +8,12 @@
       "win": {
         "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
         "mirror": "https://ghproxy.com/https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
-        "target": "yt-dlp.exe",
+        "target": "bin/yt-dlp.exe",
         "minBytes": 5000000
       },
       "linux": {
         "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
-        "target": "yt-dlp",
+        "target": "bin/yt-dlp",
         "minBytes": 5000000
       }
     },
@@ -22,9 +22,12 @@
       "version": "gyan.dev essentials",
       "win": {
         "url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
-        "target": "ffmpeg/bin/",
+        "target": "bin/",
         "unzip": true,
-        "binary": ["ffmpeg/bin/ffmpeg.exe", "ffmpeg/bin/ffprobe.exe"],
+        "binary": [
+          "ffmpeg.exe",
+          "ffprobe.exe"
+        ],
         "minBytes": 30000000
       },
       "note": "Linux 容器内经 Dockerfile.media 的 apt 安装，不走本清单"
@@ -34,42 +37,28 @@
       "version": "whisper.cpp release",
       "win": {
         "url": "https://github.com/ggml-org/whisper.cpp/releases/latest/download/whisper-bin-x64.zip",
-        "target": "whisper/",
+        "target": "bin/",
         "unzip": true,
-        "binary": ["whisper/whisper-cli.exe"],
+        "binary": [
+          "whisper-cli.exe",
+          "whisper.dll",
+          "ggml.dll",
+          "ggml-base.dll",
+          "ggml-cpu.dll",
+          "SDL2.dll"
+        ],
         "minBytes": 1000000
       },
-      "note": "release 资产名随版本可能变化，拉取失败时手动到 releases 页下载 whisper-cli.exe 放入 tools/whisper/"
+      "note": "统一装到 tools/bin/（含运行依赖 dll）；拉取失败时手动下载放入 tools/bin/"
     }
   ],
   "models": [
     {
-      "key": "tiny",
-      "label": "试水",
-      "sizeText": "约75MB",
-      "url": "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-      "fallback": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
-    },
-    {
-      "key": "base",
-      "label": "默认推荐",
-      "sizeText": "约142MB",
-      "url": "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-      "fallback": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
-    },
-    {
       "key": "small",
-      "label": "高精度",
+      "label": "标准（唯一规格）",
       "sizeText": "约466MB",
       "url": "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
       "fallback": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
-    },
-    {
-      "key": "medium",
-      "label": "最高精度（很慢）",
-      "sizeText": "约1.5GB",
-      "url": "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-      "fallback": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"
     }
   ]
 }

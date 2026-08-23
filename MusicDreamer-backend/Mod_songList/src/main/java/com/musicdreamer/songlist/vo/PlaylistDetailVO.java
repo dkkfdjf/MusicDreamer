@@ -32,4 +32,7 @@ public class PlaylistDetailVO {
     private Boolean favored;
 
     private List<PlaylistSongVO> songs;
+
+    /** 创建者昵称（非主人视角展示）。 */
+    private String creatorName;
 }

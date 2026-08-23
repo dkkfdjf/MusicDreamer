@@ -52,6 +52,140 @@ public class MediaJobs {
         tasks.runnerLocator().register(TaskManager.LOUDNESS, this::loudness);
         tasks.runnerLocator().register(TaskManager.TRANSCRIBE, this::transcribe);
         tasks.runnerLocator().register(TaskManager.SUBTITLE, this::subtitle);
+        tasks.runnerLocator().register(TaskManager.LYRICS_FETCH, this::lyricsFetch);
+    }
+
+    /**
+     * 一键获取歌词：在线歌词库（LRCLIB）优先 → 命中同步歌词则逐句校准到本地
+     * 演唱时刻（B站搬运版常有剪辑/偏移）；命中纯文本则用本地识别拆句加时间轴
+     * （文本用在线的、拆句与时间用本地的）；未命中则本地 AI 转写。
+     */
+    public void lyricsFetch(MediaTask task) {
+        Long songId = task.getSongId();
+        Map<String, Object> song = fetchSong(songId);
+        String title = String.valueOf(song.getOrDefault("name", ""));
+        String artist = String.valueOf(song.getOrDefault("singerName", ""));
+        double duration = song.get("duration") instanceof Number n ? n.doubleValue() : 0;
+
+        // 1) 在线匹配（网络失败静默降级到本地识别）
+        tasks.progress(task.getId(), 10, "正在匹配在线歌词库…");
+        LrcSupport.OnlineMatch m = null;
+        try {
+            m = LrcSupport.matchOnlineLyrics(title, artist, duration);
+        } catch (Exception e) {
+            log.warn("lrclib match degraded: {}", e.getMessage());
+        }
+
+        try {
+            if (m != null && m.syncedLyrics() != null) {
+                tasks.progress(task.getId(), 25, "已命中在线歌词，正在本地校准时间轴…");
+                List<LrcSupport.LrcLine> lrc = LrcSupport.parseLrc(m.syncedLyrics());
+                List<LrcSupport.LrcLine> wav = transcribeForAlign(task, song);
+                LyricAligner.Aligned aligned = wav == null ? null
+                        : LyricAligner.computeAlignedTimes(lrc, wav, duration > 0 ? duration : null);
+                String content;
+                String note;
+                if (aligned != null) {
+                    content = LyricAligner.writeAlignedLyrics(m.syncedLyrics(), aligned.times(), aligned.median());
+                    note = String.format("已逐句校准 %d/%d 句（整体偏移 %.1fs）", aligned.pairs(), lrc.size(), aligned.median());
+                } else {
+                    content = m.syncedLyrics();
+                    note = wav == null ? "本地校准不可用，保留在线时间轴" : "本地校准未完成，保留在线时间轴";
+                }
+                saveLyric(songId, "[source:lrclib]\n" + content);
+                tasks.finish(task.getId(), "SUCCESS", note + "（" + m.trackName() + "）");
+                return;
+            }
+
+            if (m != null && m.plainLyrics() != null) {
+                tasks.progress(task.getId(), 25, "在线歌词无时间轴，正在用本地识别添加…");
+                List<LrcSupport.LrcLine> plain = LrcSupport.parseLrc(m.plainLyrics());
+                List<LrcSupport.LrcLine> wav = transcribeForAlign(task, song);
+                if (wav != null) {
+                    LyricAligner.Merged merged = LyricAligner.mergePlainWithWav(plain, wav);
+                    int need = Math.max(3, (int) Math.ceil(plain.size() * 0.25));
+                    if (merged.matched() >= need) {
+                        String splitNote = merged.lines().size() > plain.size()
+                                ? String.format("，已按演唱拆分为 %d 行", merged.lines().size()) : "";
+                        saveLyric(songId, "[source:lrclib]\n" + LyricAligner.writeMergedLyrics(merged.lines()));
+                        tasks.finish(task.getId(), "SUCCESS",
+                                String.format("已用本地识别添加时间轴（%d/%d 句对齐%s）（%s）",
+                                        merged.matched(), plain.size(), splitNote, m.trackName()));
+                        return;
+                    }
+                    // 对不上：宁可保留纯文本，不写错误时间轴
+                    saveLyric(songId, "[source:lrclib]\n" + m.plainLyrics());
+                    tasks.finish(task.getId(), "SUCCESS",
+                            String.format("在线歌词与本地识别对不上（%d/%d 句），保留纯文本（%s）",
+                                    merged.matched(), plain.size(), m.trackName()));
+                    return;
+                }
+                saveLyric(songId, "[source:lrclib]\n" + m.plainLyrics());
+                tasks.finish(task.getId(), "SUCCESS", "已保存在线纯文本歌词（本地识别不可用，无时间轴）（" + m.trackName() + "）");
+                return;
+            }
+
+            // 2) 在线无命中 → 本地 AI 转写
+            tasks.progress(task.getId(), 25, "在线无歌词，本地 AI 识别中…");
+            transcribe(task);
+        } catch (Exception e) {
+            tasks.finish(task.getId(), "FAILED", "获取歌词异常：" + e.getMessage());
+        }
+    }
+
+    /** 为对齐/加时间轴跑一次快速整首转写，返回解析后的歌词行；失败返回 null。 */
+    private List<LrcSupport.LrcLine> transcribeForAlign(MediaTask task, Map<String, Object> song) {
+        Long songId = task.getSongId();
+        String ffmpeg = tools.locate(ToolsLocator.FFMPEG);
+        String whisper = tools.locate(ToolsLocator.WHISPER);
+        Path model = findModel(settings.whisperModel());
+        if (whisper == null || model == null) return null;
+        Path mp3 = storage.localPath((String) song.get("fileUrl"));
+        if (mp3 == null || !Files.isRegularFile(mp3)) return null;
+        Path taskDir = storage.dir("task");
+        Path wav = taskDir.resolve(task.getId() + "_align.wav");
+        Path outPrefix = taskDir.resolve(task.getId() + "_align");
+        try {
+            // 清掉可能残留的上次产物，防止 whisper 失败时读到陈旧 LRC
+            Files.deleteIfExists(taskDir.resolve(task.getId() + "_align.lrc"));
+            ExecResult pre = executor.run(List.of(ffmpeg, "-y", "-i", mp3.toString(),
+                            "-ar", "16000", "-ac", "1", wav.toString()),
+                    5 * 60_000L, null, TaskManager.cancelKey(task.getId())).get();
+            if (pre.getExitCode() != 0) return null;
+            // -ml 40 控制单行长度（按句切分）、束搜索 + 零温度提升稳定性
+            ExecResult tr = executor.run(List.of(whisper, "-m", model.toString(), "-f", wav.toString(),
+                            "-l", "auto", "-bs", "5", "-bo", "5", "-tp", "0", "-ml", "40",
+                            "-olrc", "-of", outPrefix.toString(), "-pp"),
+                    30 * 60_000L,
+                    line -> {
+                        Matcher pm = WHISPER_PROGRESS.matcher(line);
+                        if (pm.find()) {
+                            tasks.progress(task.getId(),
+                                    25 + Integer.parseInt(pm.group(1)) * 6 / 10, "本地快转写中… " + pm.group(1) + "%");
+                        }
+                    }, TaskManager.cancelKey(task.getId())).getNow(null);
+            if (tr == null || tr.getExitCode() != 0) return null;
+            Path lrc = taskDir.resolve(task.getId() + "_align.lrc");
+            if (!Files.isRegularFile(lrc)) return null;
+            return LrcSupport.parseLrc(Files.readString(lrc));
+        } catch (Exception e) {
+            log.warn("align transcribe degraded: {}", e.getMessage());
+            return null;
+        } finally {
+            try {
+                Files.deleteIfExists(wav);
+                Files.deleteIfExists(taskDir.resolve(task.getId() + "_align.lrc"));
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** 保存歌词文件到 data/lyric/{songId}.lrc 并回写 song.lyric_url。 */
+    private void saveLyric(Long songId, String content) throws Exception {
+        Path finalLrc = storage.dir("lyric").resolve(songId + ".lrc");
+        Files.writeString(finalLrc, content == null ? "" : content);
+        call(() -> music.updateLyric(Map.of("songId", songId,
+                "lyricUrl", storage.fileUrl("lyric", songId + ".lrc"))));
     }
 
     /** 响度分析：ffmpeg ebur128 结果在 stderr（约束三），增益=目标-实测，回写 song 表。 */

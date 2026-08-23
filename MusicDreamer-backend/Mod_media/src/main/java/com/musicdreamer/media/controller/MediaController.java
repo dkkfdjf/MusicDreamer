@@ -165,6 +165,15 @@ public class MediaController {
         return Mess.ok(Map.of("taskId", t.getId()));
     }
 
+    /** 一键获取歌词：在线歌词库优先（自动校准/加时间轴），无命中本地 AI 转写。 */
+    @PostMapping("/lyrics/fetch/{songId}")
+    public Mess lyricsFetch(@PathVariable Long songId) {
+        AuthContext.requireUploader();
+        MediaTask t = tasks.submit(TaskManager.LYRICS_FETCH, null, songId,
+                AuthContext.getUserId(), "获取歌词排队");
+        return Mess.ok(Map.of("taskId", t.getId()));
+    }
+
     @PostMapping("/loudness/{songId}")
     public Mess loudness(@PathVariable Long songId) {
         AuthContext.requireUploader();
