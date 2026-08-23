@@ -110,11 +110,12 @@ function onGripUp() {
   bottom: 96px;
   width: 520px;
   padding: 10px 34px 10px 16px;
-  background: rgba(22, 24, 31, 0.88);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 900;
   user-select: none;
   cursor: default;
@@ -122,7 +123,7 @@ function onGripUp() {
 .dl-line {
   font-size: 17px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;

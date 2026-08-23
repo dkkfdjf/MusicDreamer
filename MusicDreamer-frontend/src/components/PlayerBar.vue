@@ -1,99 +1,102 @@
 <template>
-  <footer class="player-bar">
+  <footer class="player-bar" ref="rootEl">
     <!-- 左：当前曲目 -->
-    <div class="player-info">
-      <div class="song-cover">
+    <div class="track">
+      <div class="cv">
         <img v-if="player.current && player.current.coverUrl && !coverFail"
           :src="resolveFileUrl(player.current.coverUrl)" alt="封面" @error="coverFail = true" />
-        <div v-else class="cover-ph">♪</div>
+        <div v-else class="ph">♪</div>
       </div>
-      <div class="song-details">
-        <div class="song-title">{{ player.current ? player.current.name : '未在播放' }}</div>
-        <div class="song-artist">{{ player.current ? player.currentSinger : 'Music Dreamer' }}</div>
+      <div class="meta">
+        <b>{{ player.current ? player.current.name : '未在播放' }}</b>
+        <span>{{ player.current ? player.currentSinger : 'Music Dreamer' }}</span>
       </div>
     </div>
 
-    <!-- 中：控制 + 进度 -->
-    <div class="player-controls">
-      <div class="control-buttons">
-        <button class="icon-btn mode-btn" :title="player.modeLabel" @click="player.cycleMode()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <template v-if="player.mode === 1">
-              <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
-              <text x="9" y="20" font-size="11" fill="currentColor" stroke="none" font-weight="700">1</text>
-            </template>
-            <template v-else-if="player.mode === 3">
-              <polyline points="16,3 21,3 21,8" /><path d="M4 20L21 3" />
-              <polyline points="21,16 21,21 16,21" /><path d="M15 15l6 6" /><path d="M4 4l5 5" />
-            </template>
-            <template v-else>
-              <polyline points="17,1 21,5 17,9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
-              <polyline points="7,23 3,19 7,15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
-            </template>
+    <!-- 中：控制 + 波形进度（preview-v2：冻结的回声波形当进度条） -->
+    <div class="mid">
+      <div class="ctrls">
+        <button class="ctl" :title="player.modeLabel" @click="player.cycleMode()">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M7 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+            <text v-if="player.mode === 1" x="9.5" y="15" font-size="9" fill="currentColor" stroke="none"
+              font-weight="700">1</text>
+            <text v-else-if="player.mode === 3" x="8" y="15" font-size="9" fill="currentColor" stroke="none"
+              font-weight="700">∞</text>
           </svg>
         </button>
-        <button class="icon-btn transport-btn" title="上一首" @click="player.prev()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+        <button class="ctl" title="上一首" @click="player.prev()">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 6h2v12H7zm3 0 9 6-9 6z" transform="scale(-1,1) translate(-24,0)" />
           </svg>
         </button>
-        <button class="icon-btn btn-play" :title="player.playing ? '暂停' : '播放'" @click="player.toggle()">
-          <svg v-if="player.loading" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        <button class="play" ref="playBtn" :title="player.playing ? '暂停' : '播放'" @click="player.toggle()">
+          <svg v-if="player.loading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" class="spin">
             <path d="M21 12a9 9 0 1 1-6.2-8.56" />
           </svg>
-          <svg v-else-if="player.playing" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 5h4v14H6zm8 0h4v14h-4z" />
+          <svg v-else-if="player.playing" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="5" width="4" height="14" rx="1" />
+            <rect x="14" y="5" width="4" height="14" rx="1" />
           </svg>
-          <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </button>
-        <button class="icon-btn transport-btn" title="下一首" @click="player.next(false)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 5v14l12-7z" />
           </svg>
         </button>
-        <button class="icon-btn speed-btn" title="播放速度（点击切换）" @click="cycleRate">
-          {{ rateLabel }}
+        <button class="ctl" title="下一首" @click="player.next(false)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 6h2v12H7zm3 0 9 6-9 6z" />
+          </svg>
         </button>
-        <button class="icon-btn ab-btn" :class="{ active: player.abA !== null }"
-          title="A-B 复读（第一次点设 A 点，第二次设 B 点开始循环，第三次清除）" @click="player.cycleAb()">
-          {{ abLabel }}
-        </button>
-        <button class="icon-btn speed-btn" title="播放队列" @click="queueOpen = !queueOpen">
-          队列{{ player.queue.length ? ' ' + player.queue.length : '' }}
+        <button class="ctl" title="播放队列" @click="queueOpen = !queueOpen">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="12" y2="18" />
+          </svg>
         </button>
       </div>
 
-      <div class="progress-container">
-        <span class="time-display">{{ fmt(player.currentTime) }}</span>
-        <div class="progress-bar-container" ref="barEl"
+      <div class="seek">
+        <time class="mono">{{ fmt(player.currentTime) }}</time>
+        <div class="seek-bar" ref="barEl" role="slider" aria-label="进度" aria-valuemin="0" aria-valuemax="100"
+          :aria-valuenow="Math.round(pct)" tabindex="0"
           @pointerdown="onBarDown" @pointermove="onBarMove" @pointerup="onBarUp" @pointercancel="onBarUp">
-          <div class="progress-bar">
-            <div class="progress-filled" :style="{ width: pct + '%' }"></div>
-            <div class="progress-handle" :style="{ left: pct + '%' }"></div>
-          </div>
+          <i class="fill" :style="{ width: pct + '%' }"></i>
         </div>
-        <span class="time-display">{{ fmt(player.duration) }}</span>
+        <time class="mono">{{ fmt(player.duration) }}</time>
       </div>
     </div>
 
-    <!-- 右：音量 -->
-    <div class="player-extra">
-      <button class="icon-btn extra-btn" :title="muted ? '取消静音' : '静音'" @click="toggleMute">
-        <svg v-if="muted || player.volume === 0" width="18" height="18" viewBox="0 0 24 24" fill="none"
+    <!-- 右：收藏 / 倍速 / A-B / 音量 -->
+    <div class="end">
+      <button class="ctl heart" :class="{ on: currentCollected }" :disabled="!player.current"
+        :title="currentCollected ? '取消收藏' : '收藏当前歌曲'" @click="collectCurrent">
+        <svg width="16" height="16" viewBox="0 0 24 24" :fill="currentCollected ? 'currentColor' : 'none'"
           stroke="currentColor" stroke-width="2">
-          <path d="M11 5L6 9H2v6h4l5 4V5z" /><line x1="23" y1="9" x2="17" y2="15" />
-          <line x1="17" y1="9" x2="23" y2="15" />
-        </svg>
-        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 5L6 9H2v6h4l5 4V5z" />
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+          <path d="M12 21s-8-4.5-8-10a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3c0 5.5-8 10-8 10z" />
         </svg>
       </button>
-      <input type="range" min="0" max="100" :value="volPct" aria-label="音量" @input="onVolume" />
-      <span class="volume-display">{{ volPct }}</span>
+      <button class="pill" title="播放速度（点击切换）" @click="cycleRate">{{ rateLabel }}</button>
+      <button class="pill"
+        :class="{ 'set-a': player.abA !== null && player.abB === null, looping: player.abA !== null && player.abB !== null }"
+        title="A-B 复读（第一次点设 A 点，第二次设 B 点开始循环，第三次清除）" @click="player.cycleAb()">
+        {{ abLabel }}
+      </button>
+      <div class="vol">
+        <button class="ctl" :title="muted ? '取消静音' : '静音'" @click="toggleMute">
+          <svg v-if="muted || player.volume === 0" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2">
+            <path d="M11 5 6 9H2v6h4l5 4V5z" /><line x1="23" y1="9" x2="17" y2="15" />
+            <line x1="17" y1="9" x2="23" y2="15" />
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 5 6 9H2v6h4l5 4V5z" />
+            <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+          </svg>
+        </button>
+        <input type="range" min="0" max="100" :value="volPct" aria-label="音量" @input="onVolume" />
+      </div>
     </div>
 
     <!-- 播放队列浮层 -->
@@ -116,23 +119,74 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { usePlayerStore } from '../stores/player'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { usePlayerStore, getAudioEl } from '../stores/player'
+import { useUserStore } from '../stores/user'
 import { resolveFileUrl, singerName } from '../utils'
+import { gsap, prefersReduced } from '../utils/motion'
+import { getAnalyser } from '../utils/audioAnalyser'
 
 const player = usePlayerStore()
+const userStore = useUserStore()
 const coverFail = ref(false)
 const queueOpen = ref(false)
 const barEl = ref(null)
+const rootEl = ref(null)
+const playBtn = ref(null)
 const dragging = ref(false)
 const muted = ref(false)
 const lastVol = ref(0.8)
 
+onMounted(() => {
+  if (rootEl.value && !prefersReduced) {
+    gsap.from(rootEl.value, { y: 90, duration: 0.6, ease: 'power3.out', clearProps: 'transform' })
+  }
+  if (!prefersReduced && !rafId) rafId = requestAnimationFrame(pulseLoop)
+})
+
+onBeforeUnmount(() => { if (rafId) cancelAnimationFrame(rafId) })
+
+// 播放/暂停切换时给橙色圆钮一个轻微回弹
+watch(() => player.playing, () => {
+  if (playBtn.value && !prefersReduced) {
+    gsap.fromTo(playBtn.value, { scale: 0.82 }, { scale: 1, duration: 0.4, ease: 'back.out(3)' })
+  }
+})
+
+/* ---------- 播放能量 → 呼吸辉光（Web Audio Analyser，真音频数据） ----------
+   进度条本身用普通轨道；频谱可视化在首页 hero。这里只保留：
+   全局 Analyser 单例读取整体能量，驱动底栏上缘的三色呼吸光。 */
+let analyser = null
+let rafId = 0
+let pulseV = 0
+const FREQ = new Uint8Array(128)
+
+function pulseLoop() {
+  rafId = 0
+  let target = 0
+  if (player.playing && analyser) {
+    analyser.getByteFrequencyData(FREQ)
+    let sum = 0
+    for (let i = 2; i < 90; i++) sum += FREQ[i]
+    target = Math.min(1, (sum / 88 / 255) * 1.6)
+  }
+  pulseV += (target - pulseV) * (target > pulseV ? 0.4 : 0.08) // 快起慢落
+  if (rootEl.value) rootEl.value.style.setProperty('--pulse', pulseV.toFixed(3))
+  if (player.playing || pulseV > 0.002) rafId = requestAnimationFrame(pulseLoop)
+}
+
+watch(() => player.playing, (on) => {
+  if (on && !prefersReduced) analyser = getAnalyser(getAudioEl())
+  if (!rafId && !prefersReduced) rafId = requestAnimationFrame(pulseLoop)
+})
 const pct = computed(() => {
   const d = player.duration || 0
   return d > 0 ? Math.min(100, (player.currentTime / d) * 100) : 0
 })
 const volPct = computed(() => Math.round((player.volume || 0) * 100))
+const currentCollected = computed(() =>
+  player.current ? userStore.isCollected(player.current.id) : false
+)
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const rateLabel = computed(() => (Number(player.rate) || 1).toFixed(2).replace(/0$/, '') + 'x')
@@ -145,6 +199,11 @@ const abLabel = computed(() => {
 function cycleRate() {
   const i = RATES.indexOf(Number(player.rate) || 1)
   player.setRate(RATES[(i + 1) % RATES.length])
+}
+
+async function collectCurrent() {
+  if (!player.current) return
+  await userStore.toggleCollect(player.current.id)
 }
 
 function fmt(t) {
@@ -191,22 +250,62 @@ function toggleMute() {
 </script>
 
 <style scoped>
-.song-cover {
-  width: 48px;
-  height: 48px;
-  border-radius: 9px;
-  overflow: hidden;
+/* 播放条：横跨整个窗口下缘的一条唱机台面 —— 与侧栏、内容同宽，
+   无圆角无悬浮，画布环境光直接透过毛玻璃 */
+.player-bar {
   flex-shrink: 0;
+  height: 84px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 22px;
+  padding: 0 32px;
+  background: rgba(255, 254, 250, 0.78);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border-top: 1px solid rgba(92, 72, 50, 0.1);
+  position: relative;
+  z-index: 20;
 }
-.song-cover img {
+
+/* 呼吸辉光：播放时按整体频谱能量（--pulse，JS 每帧回写）把三色光晕投到内容区，
+   暂停即熄灭 —— 音响亮着的隐喻 */
+.player-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -30px;
+  height: 30px;
+  background: linear-gradient(90deg, #ff6b1a, #e11d92 50%, #0699b8);
+  filter: blur(24px);
+  opacity: calc(var(--pulse, 0) * 0.32);
+  pointer-events: none;
+}
+
+/* 左：当前曲目 */
+.track {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+.track .cv {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.track .cv img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
-.song-cover .cover-ph {
+.track .cv .ph {
   width: 100%;
   height: 100%;
   display: flex;
@@ -214,10 +313,68 @@ function toggleMute() {
   justify-content: center;
   font-size: 20px;
   color: var(--accent);
-  background: var(--surface-2);
 }
-.mode-btn:hover {
-  color: var(--accent);
+.track .meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.track b {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track span {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 中：控制 + 波形进度 */
+.mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.ctrls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.ctl {
+  width: 28px;
+  height: 28px;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ctl:hover {
+  color: var(--text);
+}
+.play {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  color: var(--accent-text);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.play:hover {
+  transform: scale(1.06);
+  box-shadow: 0 5px 18px rgba(255, 107, 26, 0.4);
 }
 .spin {
   animation: pbspin 1s linear infinite;
@@ -225,8 +382,197 @@ function toggleMute() {
 @keyframes pbspin {
   to { transform: rotate(360deg); }
 }
-.progress-bar-container {
+
+.seek {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 540px;
+}
+.seek time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+/* 普通进度条：暖墨细轨道 + 品牌渐变填充，悬停加粗 */
+.seek-bar {
+  flex: 1;
+  height: 14px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   cursor: pointer;
   touch-action: none;
+  position: relative;
+}
+.seek-bar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(92, 72, 50, 0.16);
+  transition: height 0.15s ease;
+}
+.seek-bar .fill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--magenta));
+  transition: height 0.15s ease;
+}
+.seek-bar .fill::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%) scale(0);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--glow-accent);
+  transition: transform 0.15s ease;
+}
+.seek-bar:hover::before,
+.seek-bar:hover .fill {
+  height: 7px;
+}
+.seek-bar:hover .fill::after {
+  transform: translateY(-50%) scale(1);
+}
+
+/* 右：收藏 / 倍速 / A-B / 音量 */
+.end {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: flex-end;
+}
+.heart.on {
+  color: var(--magenta);
+}
+.heart:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.pill:hover {
+  color: var(--text);
+  border-color: rgba(0, 0, 0, 0.25);
+}
+.pill.set-a {
+  color: var(--warning);
+  border-color: rgba(255, 194, 75, 0.5);
+}
+.pill.looping {
+  color: var(--accent);
+  border-color: rgba(255, 107, 26, 0.5);
+}
+.vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vol input[type="range"] {
+  width: 74px;
+  accent-color: var(--accent);
+  height: 3px;
+  cursor: pointer;
+}
+
+@media (max-width: 980px) {
+  .end .pill {
+    display: none;
+  }
+  .vol input[type="range"] {
+    display: none;
+  }
+  .player-bar {
+    padding: 0 14px;
+  }
+}
+
+/* ---------- 播放队列浮层 ---------- */
+.queue-pop {
+  position: absolute;
+  right: 20px;
+  bottom: 92px;
+  width: 340px;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  z-index: 60;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.queue-item:hover {
+  background: var(--glass);
+}
+.queue-item.active {
+  background: var(--cyan-soft);
+}
+.queue-item.active .qname {
+  color: var(--cyan);
+}
+.qidx {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  width: 20px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.qname {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qsinger {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+  flex-shrink: 0;
+}
+.qdel {
+  color: var(--text-faint);
+  font-size: 15px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.qdel:hover {
+  color: var(--error);
 }
 </style>

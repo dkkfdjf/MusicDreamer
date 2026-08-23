@@ -1,5 +1,11 @@
 <template>
   <div class="admin">
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Console · 管理后台</div>
+        <h1>管理后台</h1>
+      </div>
+    </div>
     <el-tabs v-model="tab" tab-position="left" @tab-change="load">
       <el-tab-pane label="歌曲审核" name="audit">
         <el-table :data="auditSongs" v-loading="loading">
@@ -30,10 +36,13 @@
               <el-tag :type="(SONG_STATUS[row.status] || {}).type">{{ (SONG_STATUS[row.status] || {}).label }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" align="center">
+          <el-table-column label="操作" width="290" align="center">
             <template #default="{ row }">
+              <el-button size="small" @click="edit(row)">编辑</el-button>
+              <el-button size="small" type="primary" plain @click="lyric(row)">歌词</el-button>
               <el-button v-if="row.status === 2" size="small" type="danger" plain @click="takedown(row)">下架</el-button>
               <el-button v-if="row.status === 0" size="small" type="success" plain @click="relist(row)">重新上架</el-button>
+              <el-button size="small" type="danger" @click="del(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -146,14 +155,32 @@
     </el-tabs>
 
     <ReasonDialog v-model="reasonVisible" :title="reasonTitle" @confirm="onReasonConfirm" />
+
+    <SongEditDialog v-model="editVisible" :song="editSong" @saved="load" />
+
+    <el-dialog v-model="lyricVisible" title="歌词（支持截图 OCR 识别）" width="560px">
+      <el-upload :auto-upload="false" :limit="1" :on-change="onOcrImage" accept="image/*" :show-file-list="false">
+        <el-button :loading="ocrRunning">选歌词截图自动识别（Windows OCR）</el-button>
+      </el-upload>
+      <el-input v-model="lyricText" type="textarea" :rows="12" style="margin-top:10px"
+        placeholder="粘贴歌词文本，或选截图自动识别；支持 LRC 时间轴格式 [mm:ss.xx] 歌词" />
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
+        保存后生成 .lrc 文件并绑定到该歌曲，播放页与桌面歌词即可展示
+      </div>
+      <template #footer>
+        <el-button @click="lyricVisible = false">取消</el-button>
+        <el-button type="primary" :loading="lyricSaving" @click="saveLyric">保存歌词</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message, confirm } from '../utils/feedback'
 import api from '../api'
-import { listOf, SONG_STATUS, fmtTime } from '../utils'
+import { listOf, SONG_STATUS, fmtTime, resolveFileUrl } from '../utils'
+import SongEditDialog from '../components/SongEditDialog.vue'
 import ReasonDialog from '../components/ReasonDialog.vue'
 
 const tab = ref('audit')
@@ -165,6 +192,61 @@ const applications = ref([])
 const reports = ref([])
 const toolsList = ref([])
 const models = ref([])
+
+const editVisible = ref(false)
+const editSong = ref(null)
+
+function edit(row) {
+  editSong.value = row
+  editVisible.value = true
+}
+
+const lyricVisible = ref(false)
+const lyricText = ref('')
+const lyricSong = ref(null)
+const lyricSaving = ref(false)
+const ocrRunning = ref(false)
+
+async function lyric(row) {
+  lyricSong.value = row
+  lyricText.value = ''
+  lyricVisible.value = true
+  // 已有歌词先拉回编辑
+  try {
+    const d = await api.songDetail(row.id)
+    if (d && d.lyricUrl) {
+      const res = await fetch(resolveFileUrl(d.lyricUrl))
+      if (res.ok) lyricText.value = await res.text()
+    }
+  } catch (e) { /* 无歌词忽略 */ }
+}
+
+async function onOcrImage(file) {
+  if (!file.raw) return
+  ocrRunning.value = true
+  try {
+    const up = await api.uploadImage(file.raw)
+    const data = await api.mediaOcr(up.url)
+    lyricText.value = (lyricText.value ? lyricText.value + '\n' : '') + (data.text || '')
+    message.success('OCR 识别完成，请校对后保存')
+  } finally {
+    ocrRunning.value = false
+  }
+}
+
+async function saveLyric() {
+  if (!lyricText.value.trim()) return message.warning('歌词内容为空')
+  lyricSaving.value = true
+  try {
+    const f = new File([lyricText.value], `song-${lyricSong.value.id}.lrc`, { type: 'text/plain' })
+    const up = await api.uploadLyric(f)
+    await api.songEdit(lyricSong.value.id, { lyricUrl: up.url })
+    message.success('歌词已保存')
+    lyricVisible.value = false
+  } finally {
+    lyricSaving.value = false
+  }
+}
 
 const reasonVisible = ref(false)
 const reasonTitle = ref('')
@@ -203,11 +285,11 @@ async function load() {
 async function audit(row, pass) {
   if (pass) {
     await api.songAudit({ songId: row.id, pass: true })
-    ElMessage.success('已通过，歌曲发布')
+    message.success('已通过，歌曲发布')
   } else {
     askReason('驳回原因', async (reason) => {
       await api.songAudit({ songId: row.id, pass: false, rejectReason: reason })
-      ElMessage.success('已驳回')
+      message.success('已驳回')
       load()
     })
     return
@@ -218,31 +300,38 @@ async function audit(row, pass) {
 function takedown(row) {
   askReason('下架原因', async (reason) => {
     await api.songTakedown(row.id, reason)
-    ElMessage.success('已下架')
+    message.success('已下架')
     load()
   })
 }
 
 async function relist(row) {
   await api.songRelist(row.id)
-  ElMessage.success('已重新上架')
+  message.success('已重新上架')
+  load()
+}
+
+async function del(row) {
+  await confirm(`删除《${row.name}》将连带版本、评论、收藏，不可恢复，确定？`, { title: '删除歌曲' })
+  await api.songDelete(row.id)
+  message.success('已删除')
   load()
 }
 
 async function toggleUser(row) {
   await api.setUserStatus({ userId: row.id, status: row.status === 1 ? 0 : 1 })
-  ElMessage.success('已更新')
+  message.success('已更新')
   load()
 }
 
 async function singerAudit(row, pass) {
   if (pass) {
     await api.singerAudit({ applicationId: row.id, pass: true })
-    ElMessage.success('已通过，申请人升级为歌手')
+    message.success('已通过，申请人升级为歌手')
   } else {
     askReason('驳回原因', async (reason) => {
       await api.singerAudit({ applicationId: row.id, pass: false, rejectReason: reason })
-      ElMessage.success('已驳回')
+      message.success('已驳回')
       load()
     })
     return
@@ -252,29 +341,29 @@ async function singerAudit(row, pass) {
 
 async function handleReport(row, pass, action) {
   await api.reportHandle({ id: row.id, pass, action: action || '', handleResult: action === 'takedown' ? '核实违规，已下架' : '' })
-  ElMessage.success('已处理')
+  message.success('已处理')
   load()
 }
 
 async function updateYtdlp() {
   await api.updateYtdlp()
-  ElMessage.success('更新任务已提交，稍后刷新查看')
+  message.success('更新任务已提交，稍后刷新查看')
 }
 
 async function modelDownload(row) {
   await api.modelDownload(row.key)
-  ElMessage.success('模型下载任务已提交')
+  message.success('模型下载任务已提交')
 }
 
 async function modelUse(row) {
   await api.modelUse(row.key)
-  ElMessage.success('已切换，下次任务生效')
+  message.success('已切换，下次任务生效')
   load()
 }
 
 async function modelDelete(row) {
   await api.modelDelete(row.key)
-  ElMessage.success('已删除')
+  message.success('已删除')
   load()
 }
 

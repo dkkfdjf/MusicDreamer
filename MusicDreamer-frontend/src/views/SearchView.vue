@@ -1,56 +1,55 @@
 <template>
-  <div class="search">
-    <el-tabs v-model="tab">
-      <el-tab-pane label="歌曲" name="songs">
-        <el-table :data="songs" v-loading="loading" empty-text="输入关键词搜索歌曲">
-          <el-table-column label="歌曲" min-width="220">
-            <template #default="{ row }">
-              <div class="song-cell">
-                <el-image :src="resolveFileUrl(row.coverUrl)" fit="cover" class="cover">
-                  <template #error><div class="cover cover-ph">♪</div></template>
-                </el-image>
-                <div>
-                  <div class="song-name">{{ row.name }}</div>
-                  <div class="song-sub">{{ singerName(row) }}<span v-if="row.album"> · {{ row.album }}</span></div>
-                </div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="时长" width="80">
-            <template #default="{ row }">{{ fmtDuration(row.duration) }}</template>
-          </el-table-column>
-          <el-table-column label="播放量" width="100" prop="playCount" />
-          <el-table-column width="90" align="center">
-            <template #default="{ $index }">
-              <el-button size="small" type="primary" circle @click="playerStore.playQueue(songs, $index)">
-                <el-icon><VideoPlay /></el-icon>
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination v-model:current-page="page" :page-size="size" :total="total"
-          layout="prev, pager, next" @current-change="doSearch" class="pager" />
-      </el-tab-pane>
-      <el-tab-pane label="歌手" name="singers">
-        <div class="singer-grid">
-          <el-card v-for="s in singers" :key="s.id" class="singer-card" shadow="hover">
-            <el-avatar :size="64" :src="resolveFileUrl(s.avatar)">{{ (s.nickname || s.username || '?').slice(0, 1) }}</el-avatar>
-            <div class="singer-name">{{ s.nickname || s.username }}</div>
-          </el-card>
+  <div class="search" v-loading="loading">
+    <header class="content-header">
+      <div>
+        <div class="eyebrow">Search</div>
+        <h1>{{ keyword ? `“${keyword}” 的搜索结果` : '搜索' }}</h1>
+      </div>
+      <div class="tabs" role="tablist" aria-label="搜索类型">
+        <button class="chip" role="tab" :aria-selected="tab === 'songs'" @click="tab = 'songs'">歌曲</button>
+        <button class="chip" role="tab" :aria-selected="tab === 'singers'" @click="tab = 'singers'">歌手</button>
+      </div>
+    </header>
+
+    <template v-if="tab === 'songs'">
+      <SongGrid :songs="songs" @play="(i) => playerStore.playQueue(songs, i)" />
+
+      <div v-if="!songs.length && !loading" class="empty-state">
+        <h3>{{ keyword ? '没有找到匹配的歌曲' : '输入关键词搜索歌曲' }}</h3>
+        <p>{{ keyword ? '换个关键词试试？' : '使用顶部搜索框，输入歌名、歌手或专辑' }}</p>
+      </div>
+
+      <el-pagination v-if="total > size" v-model:current-page="page" :page-size="size" :total="total"
+        layout="prev, pager, next" @current-change="doSearch" class="pager" />
+    </template>
+
+    <template v-else>
+      <div class="singer-grid">
+        <div v-for="s in singers" :key="s.id" class="singer-card">
+          <div class="singer-avatar">
+            <el-image v-if="s.avatar" :src="resolveFileUrl(s.avatar)" fit="cover"
+              style="width: 100%; height: 100%">
+              <template #error><span class="ph">{{ initial(s) }}</span></template>
+            </el-image>
+            <span v-else class="ph">{{ initial(s) }}</span>
+          </div>
+          <b>{{ s.nickname || s.username }}</b>
         </div>
-        <el-empty v-if="!singers.length && !loading" description="暂无匹配歌手" />
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+      <div v-if="!singers.length && !loading" class="empty-state">
+        <h3>{{ keyword ? '没有找到匹配的歌手' : '输入关键词搜索歌手' }}</h3>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { VideoPlay } from '@element-plus/icons-vue'
 import api from '../api'
 import { usePlayerStore } from '../stores/player'
-import { listOf, pageOf, resolveFileUrl, singerName, fmtDuration } from '../utils'
+import SongGrid from '../components/SongGrid.vue'
+import { listOf, pageOf, resolveFileUrl } from '../utils'
 
 const route = useRoute()
 const playerStore = usePlayerStore()
@@ -84,16 +83,143 @@ watch(() => route.query.keyword, (v) => {
 }, { immediate: true })
 
 watch(tab, () => doSearch())
+
+function initial(s) {
+  return (s.nickname || s.username || '?').slice(0, 1)
+}
 </script>
 
 <style scoped>
-.song-cell { display: flex; align-items: center; gap: 10px; }
-.cover { width: 44px; height: 44px; border-radius: 6px; flex: none; }
-.cover-ph { display: flex; align-items: center; justify-content: center; background: #f0f2f5; color: #c0c4cc; }
-.song-name { font-weight: 600; }
-.song-sub { font-size: 12px; color: #909399; margin-top: 2px; }
-.pager { margin-top: 12px; justify-content: center; }
-.singer-grid { display: flex; flex-wrap: wrap; gap: 14px; }
-.singer-card { width: 140px; text-align: center; }
-.singer-name { margin-top: 8px; font-weight: 600; }
+.search {
+  animation: v2-rise 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 30px 0 22px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.eyebrow::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.content-header h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  max-width: 560px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分类胶囊（preview-v2 chips） */
+.tabs {
+  display: flex;
+  gap: 10px;
+}
+.chip {
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  font-size: 13.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  transition: 0.2s;
+}
+.chip:hover {
+  color: var(--text);
+  border-color: rgba(0, 0, 0, 0.24);
+}
+.chip[aria-selected="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.pager {
+  margin-top: 18px;
+  justify-content: center;
+}
+
+/* 歌手卡：纸白 + 圆角头像 */
+.singer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.singer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 13.5px;
+  cursor: default;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.singer-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: var(--shadow-md);
+}
+.singer-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface-2);
+  outline: 1px solid var(--border-strong);
+}
+.singer-avatar .ph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 70px 0 40px;
+  text-align: center;
+}
+.empty-state h3 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.empty-state p {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
 </style>

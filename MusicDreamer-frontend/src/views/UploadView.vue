@@ -1,5 +1,11 @@
 <template>
   <div class="upload">
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Studio · 上传中心</div>
+        <h1>上传中心</h1>
+      </div>
+    </div>
     <el-tabs v-model="tab">
       <!-- 本地文件上传 -->
       <el-tab-pane label="本地上传" name="file">
@@ -22,6 +28,16 @@
               <el-select v-model="form.language" style="width:180px">
                 <el-option v-for="l in LANGUAGES" :key="l" :label="l" :value="l" />
               </el-select>
+            </el-form-item>
+            <el-form-item label="封面图片">
+              <el-upload :auto-upload="false" :limit="1" :on-change="onCover" accept="image/*" :file-list="coverList">
+                <el-button>选择封面（可选，提升列表观感）</el-button>
+              </el-upload>
+            </el-form-item>
+            <el-form-item label="歌词文件">
+              <el-upload :auto-upload="false" :limit="1" :on-change="onLyric" accept=".lrc,.txt" :file-list="lyricList">
+                <el-button>选择歌词（可选，LRC 带时间轴）</el-button>
+              </el-upload>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="uploading" @click="submitFile">提交（进入审核）</el-button>
@@ -91,7 +107,7 @@
 
 <script setup>
 import { ref, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from '../utils/feedback'
 import api from '../api'
 import { listOf, SONG_STATUS, STYLES, LANGUAGES, isTaskTerminal } from '../utils'
 
@@ -99,6 +115,10 @@ const tab = ref('file')
 const form = ref({ name: '', album: '', style: '流行', language: '国语' })
 const fileList = ref([])
 const picked = ref(null)
+const coverList = ref([])
+const lyricList = ref([])
+const pickedCover = ref(null)
+const pickedLyric = ref(null)
 const uploading = ref(false)
 
 const link = ref({ url: '', wantSubtitle: true, wantTranscribe: false })
@@ -111,7 +131,7 @@ const mineLoading = ref(false)
 
 function onFile(file) {
   if (file.raw && file.raw.size > 50 * 1024 * 1024) {
-    ElMessage.error('文件超过 50MB 限制')
+    message.error('文件超过 50MB 限制')
     fileList.value = []
     return
   }
@@ -119,22 +139,57 @@ function onFile(file) {
   if (!form.value.name) form.value.name = file.name.replace(/\.(mp3|flac|aac)$/i, '')
 }
 
+function onCover(file) {
+  pickedCover.value = file.raw || null
+}
+
+function onLyric(file) {
+  pickedLyric.value = file.raw || null
+}
+
+// 浏览器端读音频元数据时长（读不到回退 0，不打断提交）
+function readDuration(file) {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file)
+      const a = new Audio()
+      a.preload = 'metadata'
+      a.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(Math.round(a.duration) || 0) }
+      a.onerror = () => { URL.revokeObjectURL(url); resolve(0) }
+      a.src = url
+    } catch (e) {
+      resolve(0)
+    }
+  })
+}
+
 async function submitFile() {
-  if (!picked.value) return ElMessage.warning('请先选择音频文件')
-  if (!form.value.name) return ElMessage.warning('请填写歌名')
+  if (!picked.value) return message.warning('请先选择音频文件')
+  if (!form.value.name) return message.warning('请填写歌名')
   uploading.value = true
   try {
     const up = await api.uploadAudio(picked.value)
+    // 封面/歌词可选：选了才上传，地址随歌曲一起提交
+    let coverUrl = null
+    let lyricUrl = null
+    if (pickedCover.value) coverUrl = (await api.uploadImage(pickedCover.value)).url
+    if (pickedLyric.value) lyricUrl = (await api.uploadLyric(pickedLyric.value)).url
     await api.songSubmit({
       ...form.value,
       fileUrl: up.url,
+      coverUrl,
+      lyricUrl,
       fileFormat: (picked.value.name.split('.').pop() || 'mp3').toUpperCase(),
-      duration: 0
+      duration: await readDuration(picked.value)
     })
-    ElMessage.success('已提交，等待管理员审核')
+    message.success('已提交，等待管理员审核')
     form.value = { name: '', album: '', style: '流行', language: '国语' }
     fileList.value = []
     picked.value = null
+    coverList.value = []
+    lyricList.value = []
+    pickedCover.value = null
+    pickedLyric.value = null
     tab.value = 'mine'
     loadMine()
   } finally {
@@ -142,8 +197,17 @@ async function submitFile() {
   }
 }
 
+// 从粘贴文案里提取链接：B站分享是“标题 链接”，定位 http/www 起始截取
+function extractUrl(text) {
+  const s = String(text || '').trim()
+  const i = s.search(/https?:\/\/|www\./i)
+  if (i < 0) return s
+  const u = s.slice(i).split(/[\s一-龥]/)[0]
+  return u.replace(/[,.;:!?，。；！？)）\]】>"']+$/, '')
+}
+
 async function startDownload() {
-  const data = await api.mediaDownload({ ...link.value })
+  const data = await api.mediaDownload({ ...link.value, url: extractUrl(link.value.url) })
   task.value = { taskId: data.taskId, status: 'PENDING', progress: 0, stage: '已提交…' }
   running.value = true
   timer = setInterval(poll, 1000)
@@ -174,7 +238,7 @@ async function cancel() {
 
 async function resubmit(row) {
   await api.songResubmit(row.id)
-  ElMessage.success('已重新提交审核')
+  message.success('已重新提交审核')
   loadMine()
 }
 
@@ -200,9 +264,9 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 
 <style scoped>
 .upload-form { max-width: 640px; }
-.task-box { margin-top: 10px; border-top: 1px dashed #dcdfe6; padding-top: 12px; }
+.task-box { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 12px; }
 .task-line { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.stage { font-size: 13px; color: #606266; }
-.task-error { color: #f56c6c; font-size: 13px; margin-top: 6px; }
-.sub { color: #909399; font-size: 12px; }
+.stage { font-size: 13px; color: var(--text-muted); }
+.task-error { color: var(--error); font-size: 13px; margin-top: 6px; }
+.sub { color: var(--text-faint); font-size: 12px; }
 </style>

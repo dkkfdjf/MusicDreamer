@@ -8,6 +8,7 @@ import { resolveFileUrl, singerName } from '../utils'
 
 let audioEl = null
 let listenersBound = false
+let playSeq = 0 // 播放请求代际号：新的播放/停止使旧的在途请求作废，防止慢响应劫持当前曲目
 
 function fmtShort(t) {
   const s = Math.max(0, Math.floor(t || 0))
@@ -16,10 +17,22 @@ function fmtShort(t) {
 
 function getAudio() {
   if (!audioEl) {
-    audioEl = new Audio()
+    // HMR 热替换本模块会新建元素，旧元素若还在放就成了无法控制的"幽灵声"：接管并停掉
+    if (typeof window !== 'undefined' && window.__mdAudioEl instanceof HTMLMediaElement) {
+      audioEl = window.__mdAudioEl
+      try { audioEl.pause() } catch (e) { /* 忽略 */ }
+    } else {
+      audioEl = new Audio()
+    }
+    if (typeof window !== 'undefined') window.__mdAudioEl = audioEl
     audioEl.preload = 'auto'
   }
   return audioEl
+}
+
+/** 暴露 audio 元素给 Web Audio 频谱分析（MediaElementSource 只能建一次，必须复用同一元素） */
+export function getAudioEl() {
+  return getAudio()
 }
 
 export const PLAY_MODES = [
@@ -107,6 +120,7 @@ export const usePlayerStore = defineStore('player', {
       if (index < 0 || index >= this.queue.length) return
       const song = this.queue[index]
       const a = getAudio()
+      const seq = ++playSeq
       this.currentIndex = index
       this.currentTime = 0
       this.duration = Number(song.duration) || 0
@@ -114,8 +128,12 @@ export const usePlayerStore = defineStore('player', {
       this.loading = true
       try {
         const data = await api.songPlay(song.id)
+        if (seq !== playSeq) return // 期间已切歌/停止，本次结果作废
         const url = data && (data.fileUrl || data.url)
         if (!url) {
+          // 取不到地址：停掉旧曲并复位，避免"界面已切歌、耳朵还在放上一首"
+          a.pause()
+          this.playing = false
           ElMessage.error('未获取到播放地址')
           return
         }
@@ -126,9 +144,12 @@ export const usePlayerStore = defineStore('player', {
         this.applyVolume()
         await a.play()
       } catch (e) {
-        this.playing = false
+        if (seq === playSeq) {
+          a.pause()
+          this.playing = false
+        }
       } finally {
-        this.loading = false
+        if (seq === playSeq) this.loading = false
       }
     },
     // 整队播放：点击某行时把当前列表作为队列
@@ -246,6 +267,7 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     stop(keepQueue = false) {
+      playSeq++ // 使在途的播放请求作废（否则停止后慢响应又会把歌放出来）
       const a = getAudio()
       a.pause()
       if (!a.paused) a.currentTime = 0

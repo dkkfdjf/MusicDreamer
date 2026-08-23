@@ -40,6 +40,10 @@ request.interceptors.response.use(
       if (body.code === 0) {
         return body.data
       }
+      // noRedirect：可选登录的公开数据（如歌单广场）失败时静默，不弹错也不踢去登录页
+      if (res.config && res.config.noRedirect) {
+        return Promise.reject(new Error(body.message || `请求失败(code=${body.code})`))
+      }
       ElMessage.error(body.message || '请求失败')
       if (body.code === 2006) {
         clearAuth()
@@ -54,8 +58,14 @@ request.interceptors.response.use(
     const body = resp && resp.data
     const msg = (body && body.message) || (err && err.message) || '网络错误，请稍后重试'
     const code = body && typeof body === 'object' ? body.code : undefined
-    ElMessage.error(msg)
-    if ((resp && resp.status === 401) || code === 2006) {
+    if (err && err.config && err.config.noRedirect) {
+      return Promise.reject(err instanceof Error ? err : new Error(msg))
+    }
+    const authGone = (resp && resp.status === 401) || code === 2006
+    // 本地 token 已清空（退出登录过程中）的残留请求：静默处理，别再弹"Token已过期"
+    const postLogoutNoise = authGone && !localStorage.getItem(TOKEN_KEY)
+    if (!postLogoutNoise) ElMessage.error(msg)
+    if (authGone) {
       clearAuth()
       redirectToLogin()
     }
@@ -81,7 +91,7 @@ export const api = {
   register: (data) => post('/user/register', data),
   activate: (token) => get('/user/activate', { token }),
   login: (data) => post('/user/login', data),
-  logout: () => post('/user/logout'),
+  logout: () => post('/user/logout', null, { noRedirect: true }),
   sendResetCode: (email) => post('/user/password/send-code', { email }),
   resetPassword: (data) => post('/user/password/reset', data),
   getUserInfo: () => get('/user/info'),
@@ -108,6 +118,7 @@ export const api = {
   songAudit: (data) => post('/song/audit', data),
   songTakedown: (id, reason) => post(`/song/takedown/${id}`, { reason }),
   songRelist: (id) => post(`/song/relist/${id}`),
+  songDelete: (id) => post(`/song/delete/${id}`),
 
   // ---------- 上传 ----------
   uploadAudio: (file) => {
@@ -119,6 +130,13 @@ export const api = {
     const fd = new FormData()
     fd.append('file', file)
     return post('/upload/image', fd, { timeout: 120000 })
+  },
+  mediaOcr: (imageUrl) => post('/media/ocr', { imageUrl }),
+
+  uploadLyric: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return post('/upload/lyric', fd, { timeout: 120000 })
   },
 
   // ---------- 搜索 ----------
@@ -144,7 +162,8 @@ export const api = {
   getPlaylist: (id) => get(`/playlist/${id}`),
   favoritePlaylist: (id) => post(`/playlist/${id}/favorite`),
   unfavoritePlaylist: (id) => del(`/playlist/${id}/favorite`),
-  publicPlaylists: (params) => get('/playlist/public/list', params),
+  // 公开歌单广场：匿名可看，失败静默（老网关未放行时不影响页面）
+  publicPlaylists: (params) => get('/playlist/public/list', params, { noRedirect: true }),
 
   // ---------- 收藏 ----------
   collectAdd: (songId) => post('/collect/add', { songId }),
@@ -179,10 +198,9 @@ export const api = {
   modelUse: (key) => post(`/media/models/${key}/use`),
   modelDelete: (key) => post(`/media/models/${key}/delete`),
 
-  // ---------- 配置 / 公告 ----------
+  // ---------- 配置 ----------
   settingAll: () => get('/setting/all'),
-  settingSet: (key, value) => post(`/setting/set/${key}`, { value }),
-  announcementList: () => get('/announcement/list')
+  settingSet: (key, value) => post(`/setting/set/${key}`, { value })
 }
 
 export default api

@@ -41,19 +41,20 @@ export function pageOf(data) {
 // 歌手名（不同接口字段可能为 singerName / artistName / nickname）
 export function singerName(song) {
   if (!song) return '未知歌手'
-  return song.singerName || song.artistName || song.singerNickname || song.nickname || '未知歌手'
+  return song.singer || song.singerName || song.artistName || song.singerNickname || song.nickname || '未知歌手'
 }
 
 // 歌单内的歌曲列表字段
 export function playlistSongs(p) {
   return listOf(p && (p.songs || p.songList || p.songVOList || p.songVOs || p))
+    .map((song) => ({ ...song, id: song.id != null ? song.id : song.songId }))
 }
 
 // /playlist/my 返回 -> { created, collected }
 export function splitMyPlaylists(data) {
   if (data == null) return { created: [], collected: [] }
   const created = listOf(data.created || data.mine || data.myPlaylists || data.createdList)
-  let collected = listOf(data.collected || data.favorites || data.favorite || data.favoriteList || data.collectedList)
+  let collected = listOf(data.collected || data.favorites || data.favorited || data.favorite || data.favoriteList || data.collectedList)
   if (!created.length && !collected.length && Array.isArray(data)) {
     // 单数组结构：按 favorite 标记或 ownership 拆分
     return { created: data, collected: [] }
