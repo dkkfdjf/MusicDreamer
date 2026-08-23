@@ -28,12 +28,17 @@ MusicDreamer/                 # 工作区（设计文档与项目管理文件放
 
 ## 快速开始（开发环境）
 
+> **空机器自装清单**（仓库里只有源码/脚本/编排文件，以下需要自己装）：
+> JDK 17~22（别用 25 EA，Lombok 编译会挂）· Node.js 18+（前端）· Docker Desktop（起 MySQL/Redis/Nacos；没有 Docker 就手动装 MySQL 8、Redis 6、Nacos **2.2.3**——客户端是 2.x gRPC，1.x 注册中心连不上）· Maven（或直接用 IDEA 内置 Maven 打开 backend/ 工程；tools/ 里的 Maven 只在开发机本地，不进 Git）。
+
 ### 1. 基础设施（Docker）
 
 ```bash
 docker compose up -d mysql redis nacos
 # MySQL 首次启动自动执行 init/init.sql（建库建表 + 默认账号）
 ```
+
+> **密码对齐**：compose 的 MySQL root 密码是 `123456`，而各服务默认连的是开发机本机密码（可用环境变量 `MYSQL_PASSWORD` 覆盖）。**用 docker 起的库，启动服务前先设 `MYSQL_PASSWORD=123456`**（Windows `set` / PowerShell `$env:`，或写进 IDEA 运行配置），否则本地服务连库会失败。
 
 ### 2. 媒体工具（首次执行一次）
 
@@ -47,9 +52,9 @@ node scripts/fetch-tools.js --models     # 可选：拉取 whisper base 模型�
 ### 3. 后端
 
 ```bash
-# Maven 与 JDK22 已内置在 tools/（不依赖本机安装）
+# 需自备 JDK 与 Maven（或用 IDEA 打开 backend/ 工程用内置 Maven 构建）
 cd backend
-../tools/mvn.sh -DskipTests package
+mvn -DskipTests package
 
 # 本地起服务（任选；推荐先起核心链路）
 java -jar gateway/target/gateway-1.0.0.jar
