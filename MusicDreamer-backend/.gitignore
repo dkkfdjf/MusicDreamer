@@ -33,3 +33,7 @@ Thumbs.db
 # 调试产物
 .playwright-cli/
 cover-check.png
+
+# 个性化脚本与配置（不同开发者环境不同）
+scripts/
+
