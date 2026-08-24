@@ -40,7 +40,7 @@ docker compose up -d mysql redis nacos
 # MySQL 首次启动自动执行 init/init.sql（建库建表 + 默认账号）
 ```
 
-> **密码对齐**：compose 的 MySQL root 密码与各服务默认值均为 `123456`，用 Docker 起库**无需任何配置**。本机自装 MySQL 且密码不是 `123456` 的，启动服务前设 `MYSQL_PASSWORD` 环境变量覆盖（Windows `set` / PowerShell `$env:`，或写进 IDEA 运行配置）。
+> **密码对齐**：各服务默认连的是开发机本机库（yml 默认值，含密码）。**用 Docker 起的库，启动服务前先设 `MYSQL_PASSWORD=123456`**（Windows `set` / PowerShell `$env:`，或写进 IDEA 运行配置），否则本地服务连库会失败；本机自装 MySQL 且密码与默认值不同的同理。
 
 ### 2. 媒体工具（首次执行一次，在 **Git Bash** 里跑）
 
