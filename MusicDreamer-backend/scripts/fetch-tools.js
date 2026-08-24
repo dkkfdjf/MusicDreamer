@@ -3,12 +3,14 @@
  * fetch-tools.js —— 媒体处理工具一键拉取（团队协作机制）
  *
  * 用法：
- *   node scripts/fetch-tools.js            # 拉取 yt-dlp / ffmpeg / whisper-cli 到 tools/
+ *   node scripts/fetch-tools.js            # 拉取 yt-dlp / ffmpeg / whisper-cli 到 tools/bin/
  *   node scripts/fetch-tools.js --models   # 追加拉取 whisper 模型（默认 small）到 data/models/
  *   node scripts/fetch-tools.js --models small,medium
+ *   node scripts/fetch-tools.js --nacos    # 拉取 Nacos 2.2.3 到 tools/nacos（无 Docker 机器用）
  *
  * 约定：tools.manifest.json（进 Git）锁定来源与校验；tools/ 目录（二进制）不进 Git。
  * 可靠性逻辑与后端 TOOL_UPDATE 任务一致：流式写入 .part、失败切镜像源、体积校验后转正。
+ * 注意：解压依赖 unzip（Git Bash 自带），请在 Git Bash 里执行，别用 cmd/PowerShell。
  */
 const fs = require("fs");
 const path = require("path");
@@ -127,10 +129,34 @@ async function fetchModels(keys) {
   console.log("提示：启动后在管理端-模型管理可切换当前规格");
 }
 
+// Nacos 注册中心：无 Docker 的机器拉到 tools/nacos，
+// 配合 scripts/nacos-start.cmd 启动（yml 默认连 localhost:8848）
+async function fetchNacos() {
+  const spec = (manifest.infra || []).find(i => i.name === "nacos");
+  if (!spec) throw new Error("manifest 中无 nacos 配置");
+  const destDir = path.join(TOOLS_DIR, "nacos");
+  const hasStartup = fs.existsSync(path.join(destDir, "bin", "startup.cmd")) ||
+      fs.existsSync(path.join(destDir, "bin", "startup.sh"));
+  if (hasStartup) { console.log("nacos 已存在，跳过（如需重装先删 tools/nacos）"); return; }
+  console.log(`== nacos ${spec.version}（注册中心，约130MB，Docker 起基础设施的无需此项）`);
+  const zip = path.join(TOOLS_DIR, "nacos.zip");
+  await download(spec.url, zip, spec.minBytes);
+  const tmp = path.join(TOOLS_DIR, "_unzip_nacos");
+  await unzip(zip, tmp);
+  // 压缩包顶层就是 nacos/ 目录，整体落位到 tools/nacos
+  fs.rmSync(destDir, { recursive: true, force: true });
+  const nested = path.join(tmp, "nacos");
+  fs.renameSync(fs.existsSync(nested) ? nested : tmp, destDir);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  console.log("完成：双击 scripts/nacos-start.cmd 即可启动（需 JDK 17+）");
+}
+
 (async () => {
   const args = process.argv.slice(2);
   try {
-    if (args.includes("--models")) {
+    if (args.includes("--nacos")) {
+      await fetchNacos();
+    } else if (args.includes("--models")) {
       const idx = args.indexOf("--models");
       const keys = args[idx + 1] ? args[idx + 1].split(",") : ["small"];
       await fetchModels(keys);

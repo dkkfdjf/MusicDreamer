@@ -30,6 +30,8 @@ public class MediaJobs {
             "Summary:[\\s\\S]*?Integrated loudness:[\\s\\S]*?I:\\s+(-?\\d+\\.?\\d*)\\s+LUFS");
     private static final Pattern LUFS_FALLBACK = Pattern.compile("I:\\s+(-?\\d+\\.?\\d*)\\s+LUFS");
     private static final Pattern WHISPER_PROGRESS = Pattern.compile("progress\\s*=\\s*(\\d+)%");
+    // whisper.cpp 默认只吃 4 线程：按逻辑核数给（上限 8 防超订阅回退），多核机器提速明显
+    private static final int WHISPER_THREADS = Math.max(4, Math.min(8, Runtime.getRuntime().availableProcessors()));
 
     private final TaskManager tasks;
     private final ProcessExecutor executor;
@@ -152,9 +154,12 @@ public class MediaJobs {
                             "-ar", "16000", "-ac", "1", wav.toString()),
                     5 * 60_000L, null, TaskManager.cancelKey(task.getId())).get();
             if (pre.getExitCode() != 0) return null;
-            // -ml 40 控制单行长度（按句切分）、束搜索 + 零温度提升稳定性
+            // 对齐用的快转写走贪心解码（时间戳不受影响，文本只要够模糊匹配即可），
+            // 并显式给线程数——whisper.cpp 默认只吃 4 线程，多核机器白白闲置
+            // （束搜索版整首要数分钟，贪心+8 线程可压到几十秒）
             ExecResult tr = executor.run(List.of(whisper, "-m", model.toString(), "-f", wav.toString(),
-                            "-l", "auto", "-bs", "5", "-bo", "5", "-tp", "0", "-ml", "40",
+                            "-l", "auto", "-tp", "0", "-ml", "40",
+                            "-t", String.valueOf(WHISPER_THREADS),
                             "-olrc", "-of", outPrefix.toString(), "-pp"),
                     30 * 60_000L,
                     line -> {
@@ -308,7 +313,8 @@ public class MediaJobs {
             tasks.progress(task.getId(), 20, "AI 识别中…");
             ExecResult tr = executor.run(List.of(whisper,
                             "-m", model.toString(), "-f", wav.toString(),
-                            "-l", "auto", "-olrc", "-of", outPrefix.toString(), "-pp"),
+                            "-l", "auto", "-t", String.valueOf(WHISPER_THREADS),
+                            "-olrc", "-of", outPrefix.toString(), "-pp"),
                     30 * 60_000L,
                     line -> {
                         Matcher m = WHISPER_PROGRESS.matcher(line);

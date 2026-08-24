@@ -2,6 +2,8 @@
 
 在线音乐分享平台（课程设计项目）：听众收听、歌手创作、管理员运营；支持本地文件与外部链接（B 站 / YouTube）两种方式导入歌曲，统一审核制发布；媒体处理（下载/转码/响度均衡/AI 转写）任务化异步执行；基于物品协同过滤的个性化推荐。
 
+> **新队友直接看 [docs/团队部署教程.md](docs/团队部署教程.md)** —— 从零到跑通的完整步骤（含 Nacos 起不来的排查、工具拉取、密码对齐、常见问题速查表）。
+
 ## 工程结构
 
 ```
@@ -20,7 +22,7 @@ MusicDreamer/                 # 工作区（设计文档与项目管理文件放
 │   ├── monitor/              # Prometheus / 告警规则 / Alertmanager 配置
 │   ├── scripts/fetch-tools.js# 媒体工具一键拉取
 │   ├── tools.manifest.json   # 工具清单（版本锁定，进 Git）
-│   ├── tools/                # 本地工具（Maven、m2 仓库、yt-dlp、ffmpeg、whisper，不进 Git）
+│   ├── tools/                # 本地工具（Maven、m2 仓库、yt-dlp、ffmpeg、whisper、nacos，均不进 Git，由 fetch-tools.js 拉取或本机自备）
 │   ├── Dockerfile.service / Dockerfile.media
 │   └── docker-compose.yml    # 基础设施 + 监控 + 全量业务编排
 └── frontend/                 # 前端仓库（Vue 3 + Vite + Element Plus + Pinia，可独立 git init）
@@ -38,13 +40,14 @@ docker compose up -d mysql redis nacos
 # MySQL 首次启动自动执行 init/init.sql（建库建表 + 默认账号）
 ```
 
-> **密码对齐**：compose 的 MySQL root 密码是 `123456`，而各服务默认连的是开发机本机密码（可用环境变量 `MYSQL_PASSWORD` 覆盖）。**用 docker 起的库，启动服务前先设 `MYSQL_PASSWORD=123456`**（Windows `set` / PowerShell `$env:`，或写进 IDEA 运行配置），否则本地服务连库会失败。
+> **密码对齐**：compose 的 MySQL root 密码与各服务默认值均为 `123456`，用 Docker 起库**无需任何配置**。本机自装 MySQL 且密码不是 `123456` 的，启动服务前设 `MYSQL_PASSWORD` 环境变量覆盖（Windows `set` / PowerShell `$env:`，或写进 IDEA 运行配置）。
 
-### 2. 媒体工具（首次执行一次）
+### 2. 媒体工具（首次执行一次，在 **Git Bash** 里跑）
 
 ```bash
-node scripts/fetch-tools.js              # 拉取 yt-dlp / ffmpeg / whisper-cli 到 tools/
-node scripts/fetch-tools.js --models     # 可选：拉取 whisper base 模型（约142MB）
+node scripts/fetch-tools.js              # 拉取 yt-dlp / ffmpeg / whisper-cli 到 tools/bin/
+node scripts/fetch-tools.js --models     # 可选：拉取 whisper small 模型（约466MB）
+node scripts/fetch-tools.js --nacos      # 可选：拉取 Nacos 2.2.3 到 tools/nacos（无 Docker 机器用，配 scripts/nacos-start.cmd 启动）
 ```
 
 工具探测顺序：`tools_path` 配置 → 项目 `tools/` 目录 → 系统 PATH，装了全局的队友不拉也能跑。
@@ -67,7 +70,7 @@ java -jar Mod_upload/target/mod-upload-1.0.0.jar
 java -jar Mod_media/target/mod-media-1.0.0.jar
 ```
 
-默认账号：`admin / admin123`（管理员）、`singer1 / admin123`（歌手）、`user1 / admin123`（听众）。
+默认账号：`admin / admin123`（管理员，唯一种子账号；其余账号注册创建，邮箱未配置时激活链接打印在 Mod_login 日志里）。
 
 ### 4. 前端
 

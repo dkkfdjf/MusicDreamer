@@ -60,5 +60,14 @@
       "url": "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
       "fallback": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
     }
+  ],
+  "infra": [
+    {
+      "name": "nacos",
+      "version": "2.2.3",
+      "note": "注册中心（无 Docker 机器的替代方案）：解压到 tools/nacos，用 scripts/nacos-start.cmd 拉起。客户端是 2.x gRPC，版本不能用 1.x",
+      "url": "https://github.com/alibaba/nacos/releases/download/2.2.3/nacos-server-2.2.3.zip",
+      "minBytes": 100000000
+    }
   ]
 }
