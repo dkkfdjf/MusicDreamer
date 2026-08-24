@@ -16,6 +16,7 @@ import com.musicdreamer.music.dto.VersionDTO;
 import com.musicdreamer.music.entity.Comment;
 import com.musicdreamer.music.entity.Song;
 import com.musicdreamer.music.entity.SongVersion;
+import com.musicdreamer.music.mapper.AlbumLinkMapper;
 import com.musicdreamer.music.mapper.CollectMapper;
 import com.musicdreamer.music.mapper.CommentMapper;
 import com.musicdreamer.music.mapper.PlayHistoryMapper;
@@ -68,8 +69,10 @@ public class SongService {
     private final CommentMapper commentMapper;
     private final UserMapper userMapper;
     private final CollectMapper collectMapper;
+    private final AlbumLinkMapper albumLinkMapper;
     private final CacheHelper cache;
     private final OperationLogService operationLogService;
+    private final MediaFileCleanup fileCleanup;
 
     /** 提交歌曲（role>=1），入库即审核中。 */
     public Long submit(SongSubmitDTO dto) {
@@ -105,6 +108,7 @@ public class SongService {
         if (song.getStatus() == STATUS_PUBLISHED) {
             evictHotChart();
         }
+        syncAlbumMembership(song.getId(), dto.getAlbum(), song.getStatus() == STATUS_PUBLISHED);
         log.info("song submitted: id={}, singer={}, name={}", song.getId(), singerId, song.getName());
         return song.getId();
     }
@@ -169,6 +173,10 @@ public class SongService {
         if (StringUtils.hasText(dto.getLyricUrl())) uw.set(Song::getLyricUrl, dto.getLyricUrl());
         if (dto.getSingerName() != null) uw.set(Song::getSingerName, dto.getSingerName().trim());
         songMapper.update(null, uw);
+        // 歌名/歌手/封面都是榜单卡片展示字段，编辑后必须失效热榜缓存（否则首页最长 10 分钟仍显示旧值）
+        evictHotChart();
+        // 填了专辑名且存在同名专辑 → 自动挂进该专辑（用户预期：设置专辑=加入专辑）
+        syncAlbumMembership(id, dto.getAlbum(), song.getStatus() == STATUS_PUBLISHED);
         operationLogService.record("EDIT", "PUT",
                 Map.of("songId", id, "singerId", song.getSingerId()));
     }
@@ -262,7 +270,9 @@ public class SongService {
         operationLogService.record("RELIST", "POST", Map.of("songId", id));
     }
 
-    /** 删除歌曲（管理员）：连带版本/评论/收藏，播放历史保留，磁盘文件由存储侧治理。 */
+    /** 删除歌曲（管理员）：连带版本/评论/收藏，播放历史保留；
+     *  音频/封面/歌词文件经 Mod_media 内部接口一并删除（此前只删 DB 行，
+     *  磁盘文件全部残留成孤儿，"删除实际上没删"的根源）。 */
     public void delete(Long id) {
         AuthContext.requireAdmin();
         Song song = mustGet(id);
@@ -273,6 +283,8 @@ public class SongService {
         evictHotChart();
         operationLogService.record("DELETE_SONG", "POST", Map.of("songId", id));
         log.info("song deleted: id={}, name={}, operator={}", id, song.getName(), AuthContext.getUserId());
+        // DB 已删，文件清理放最后：失败不阻断删除（残留最多是孤儿文件）
+        fileCleanup.deleteFiles(song.getFileUrl(), song.getCoverUrl(), song.getLyricUrl());
     }
 
     /** 版本列表（本人或管理员）。 */
@@ -425,6 +437,16 @@ public class SongService {
     /** 可见性变化（发布/下架/上架）后失效热榜缓存，key 形如 chart:hot:{limit}。 */
     private void evictHotChart() {
         cache.evictByPrefix("chart:hot:");
+    }
+
+    /** 专辑字段联动：填了专辑名且存在同名专辑则幂等挂入（仅已发布歌曲，与专辑页加歌的校验一致）。 */
+    private void syncAlbumMembership(Long songId, String albumName, boolean published) {
+        if (!published || !StringUtils.hasText(albumName)) {
+            return;
+        }
+        for (Long albumId : albumLinkMapper.matchAlbumIds(albumName.trim())) {
+            albumLinkMapper.insertIfAbsent(albumId, songId);
+        }
     }
 
     private Song mustGet(Long id) {

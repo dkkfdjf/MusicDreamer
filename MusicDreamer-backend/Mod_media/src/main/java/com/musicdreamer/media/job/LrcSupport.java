@@ -174,8 +174,12 @@ public final class LrcSupport {
                 if (!cand.isEmpty() && !isNoise(cand) && artist.isEmpty()) artist = cand;
             }
         } else {
-            // 2. 无书名号：剥 【】[..] 装饰段，再按 "A_-_B" / "A - B" 拆艺术家
+            // 2. 无书名号：剥 【】[..] 装饰段，再按 "A_-_B" / "A - B" 拆艺术家。
+            //    装饰段无论能否拆出艺术家都要剥——此前 stem 只在拆分成功时才被
+            //    采用，"【4K Hi-Res】晴天-周杰伦" 这类无空格短横线标题会原样
+            //    拿去搜在线库，必然 miss 后误降级到本地转写
             String stem = title.replaceAll("[【\\[][^】\\]]*[】\\]]", " ").trim();
+            title = stem;
             String[] parts = stem.split("\\s*_+[-–—]_+\\s*|\\s+[-–—]\\s+");
             if (parts.length >= 2) {
                 String a = parts[0].replace("_", " ").trim();

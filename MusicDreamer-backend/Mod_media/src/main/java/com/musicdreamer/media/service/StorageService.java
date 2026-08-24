@@ -44,6 +44,30 @@ public class StorageService {
         return "/data/" + type + "/" + name;
     }
 
+    /** 删除 fileUrl 对应的本地文件（删除歌曲时清理音频/封面/歌词）。
+     *  只允许删存储根目录内的文件（normalize 后 startsWith 校验，防路径穿越）；
+     *  逐个尽力而为，返回实际删除数。 */
+    public int deleteUnderRoot(String... fileUrls) {
+        Path root = root();
+        int deleted = 0;
+        for (String u : fileUrls) {
+            if (u == null || u.isBlank()) {
+                continue;
+            }
+            try {
+                Path p = localPath(u).normalize();
+                if (!p.startsWith(root) || !Files.isRegularFile(p)) {
+                    continue;
+                }
+                if (Files.deleteIfExists(p)) {
+                    deleted++;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return deleted;
+    }
+
     /** 模型目录探测：{storage}/models -> ./tools/models -> ../tools/models。 */
     public Path modelsDir() {
         Path primary = root().resolve("models");

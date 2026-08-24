@@ -92,7 +92,7 @@ public class MediaJobs {
                     content = m.syncedLyrics();
                     note = wav == null ? "本地校准不可用，保留在线时间轴" : "本地校准未完成，保留在线时间轴";
                 }
-                saveLyric(songId, "[source:lrclib]\n" + content);
+                saveLyric(song, "[source:lrclib]\n" + content);
                 tasks.finish(task.getId(), "SUCCESS", note + "（" + m.trackName() + "）");
                 return;
             }
@@ -107,20 +107,20 @@ public class MediaJobs {
                     if (merged.matched() >= need) {
                         String splitNote = merged.lines().size() > plain.size()
                                 ? String.format("，已按演唱拆分为 %d 行", merged.lines().size()) : "";
-                        saveLyric(songId, "[source:lrclib]\n" + LyricAligner.writeMergedLyrics(merged.lines()));
+                        saveLyric(song, "[source:lrclib]\n" + LyricAligner.writeMergedLyrics(merged.lines()));
                         tasks.finish(task.getId(), "SUCCESS",
                                 String.format("已用本地识别添加时间轴（%d/%d 句对齐%s）（%s）",
                                         merged.matched(), plain.size(), splitNote, m.trackName()));
                         return;
                     }
                     // 对不上：宁可保留纯文本，不写错误时间轴
-                    saveLyric(songId, "[source:lrclib]\n" + m.plainLyrics());
+                    saveLyric(song, "[source:lrclib]\n" + m.plainLyrics());
                     tasks.finish(task.getId(), "SUCCESS",
                             String.format("在线歌词与本地识别对不上（%d/%d 句），保留纯文本（%s）",
                                     merged.matched(), plain.size(), m.trackName()));
                     return;
                 }
-                saveLyric(songId, "[source:lrclib]\n" + m.plainLyrics());
+                saveLyric(song, "[source:lrclib]\n" + m.plainLyrics());
                 tasks.finish(task.getId(), "SUCCESS", "已保存在线纯文本歌词（本地识别不可用，无时间轴）（" + m.trackName() + "）");
                 return;
             }
@@ -163,7 +163,7 @@ public class MediaJobs {
                             tasks.progress(task.getId(),
                                     25 + Integer.parseInt(pm.group(1)) * 6 / 10, "本地快转写中… " + pm.group(1) + "%");
                         }
-                    }, TaskManager.cancelKey(task.getId())).getNow(null);
+                    }, TaskManager.cancelKey(task.getId())).get();
             if (tr == null || tr.getExitCode() != 0) return null;
             Path lrc = taskDir.resolve(task.getId() + "_align.lrc");
             if (!Files.isRegularFile(lrc)) return null;
@@ -180,12 +180,72 @@ public class MediaJobs {
         }
     }
 
-    /** 保存歌词文件到 data/lyric/{songId}.lrc 并回写 song.lyric_url。 */
-    private void saveLyric(Long songId, String content) throws Exception {
-        Path finalLrc = storage.dir("lyric").resolve(songId + ".lrc");
+    /**
+     * 歌词落盘与回写。文件命名（用户可见目录，拒绝纯数字名）：
+     * 1) 歌曲已有 lyricUrl → 沿用原路径重取覆盖（路径稳定，不改名）；
+     * 2) 否则用 歌名.lrc；磁盘上已有同名（他人同名歌）则 歌名-songId.lrc 兜底。
+     */
+    private Path resolveLyricFile(Map<String, Object> song) {
+        Long songId = ((Number) song.get("id")).longValue();
+        Object existing = song.get("lyricUrl");
+        if (existing != null && String.valueOf(existing).endsWith(".lrc")) {
+            Path p = storage.localPath(String.valueOf(existing));
+            if (p != null && p.startsWith(storage.dir("lyric"))) {
+                return p;
+            }
+        }
+        String base = sanitizeFileName(String.valueOf(song.getOrDefault("name", "")));
+        if (base.isEmpty()) {
+            base = "未命名";
+        }
+        Path named = storage.dir("lyric").resolve(base + ".lrc");
+        if (Files.isRegularFile(named)) {
+            named = storage.dir("lyric").resolve(base + "-" + songId + ".lrc");
+        }
+        return named;
+    }
+
+    /** 文件名清洗：去 Windows 非法字符，结尾不得为点/空格，限长防路径超限。
+     *  包内共享——DownloadJob 的音频/封面命名与歌词同一套规范。 */
+    static String sanitizeFileName(String s) {
+        String cleaned = s.replaceAll("[\\\\/:*?\"<>|\\r\\n]+", " ").trim();
+        cleaned = cleaned.replaceAll("[.。\\s]+$", "");
+        return cleaned.length() > 80 ? cleaned.substring(0, 80) : cleaned;
+    }
+
+    private void saveLyric(Map<String, Object> song, String content) throws Exception {
+        Path finalLrc = resolveLyricFile(song);
         Files.writeString(finalLrc, content == null ? "" : content);
-        call(() -> music.updateLyric(Map.of("songId", songId,
-                "lyricUrl", storage.fileUrl("lyric", songId + ".lrc"))));
+        writeBackLyric(song, finalLrc);
+    }
+
+    /** 歌词文件保存（转写产物移动入正式目录）并回写 song.lyric_url。 */
+    private void saveLyricFrom(Map<String, Object> song, Path sourceLrc) throws Exception {
+        Path finalLrc = resolveLyricFile(song);
+        Files.move(sourceLrc, finalLrc, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        writeBackLyric(song, finalLrc);
+    }
+
+    /** 回写 song.lyric_url：Feign 瞬断重试 3 次——曾因服务重启窗口一次失败导致
+     *  文件已落盘但数据库指针丢失（歌曲 1/2 歌词"看不见"事故）。 */
+    private void writeBackLyric(Map<String, Object> song, Path finalLrc) {
+        Long songId = ((Number) song.get("id")).longValue();
+        String url = storage.fileUrl("lyric", finalLrc.getFileName().toString());
+        for (int i = 0; i < 3; i++) {
+            try {
+                music.updateLyric(Map.of("songId", songId, "lyricUrl", url));
+                return;
+            } catch (Exception e) {
+                log.warn("updateLyric 重试 {}/3：{}", i + 1, e.getMessage());
+                try {
+                    Thread.sleep(500L * (i + 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        log.error("updateLyric 三次均失败，songId={} lyricUrl={}（文件已落盘，可重取歌词修复指针）", songId, url);
     }
 
     /** 响度分析：ffmpeg ebur128 结果在 stderr（约束三），增益=目标-实测，回写 song 表。 */
@@ -256,9 +316,11 @@ public class MediaJobs {
                             tasks.progress(task.getId(), 20 + Integer.parseInt(m.group(1)) * 7 / 10,
                                     "AI 识别中… " + m.group(1) + "%");
                         }
-                    }, TaskManager.cancelKey(task.getId())).getNow(null);
+                    }, TaskManager.cancelKey(task.getId())).get();
             if (tr == null || tr.getExitCode() != 0) {
-                tasks.finish(task.getId(), "FAILED", "转写失败：" + brief(tr.getStderr()));
+                // getNow(null) 时代留下的隐患：tr 为 null 时不能再取 stderr；executor
+                // 超时也会完成 future（非 null），null 仅作防御
+                tasks.finish(task.getId(), "FAILED", "转写失败：" + brief(tr == null ? null : tr.getStderr()));
                 return;
             }
             Path lrc = taskDir.resolve(task.getId() + ".lrc");
@@ -266,11 +328,10 @@ public class MediaJobs {
                 tasks.finish(task.getId(), "FAILED", "未生成歌词产物");
                 return;
             }
-            Path finalLrc = storage.dir("lyric").resolve(songId + ".lrc");
+            Path finalLrc = resolveLyricFile(song);
             Files.move(lrc, finalLrc, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             tasks.progress(task.getId(), 90, "回写歌词…");
-            call(() -> music.updateLyric(Map.of("songId", songId,
-                    "lyricUrl", storage.fileUrl("lyric", songId + ".lrc"))));
+            writeBackLyric(song, finalLrc);
             tasks.finish(task.getId(), "SUCCESS", null);
         } catch (Exception e) {
             tasks.finish(task.getId(), "FAILED", "转写异常：" + e.getMessage());
@@ -297,6 +358,8 @@ public class MediaJobs {
         List<String> cmd = new ArrayList<>(List.of(ytdlp, "--write-subs", "--skip-download",
                 "--sub-lang", "zh-Hans,zh,en", "-o", out));
         cmd.addAll(netArgs.build(url));
+        // 此前漏加视频地址：yt-dlp 收到一堆参数却没有 URL，直接打印 usage 报错
+        cmd.add(url);
         ExecResult r = executor.run(cmd, 5 * 60_000L, null, TaskManager.cancelKey(task.getId())).join();
         if (r.getExitCode() != 0) {
             tasks.finish(task.getId(), "FAILED", "字幕下载失败：" + brief(r.getStderr()));
@@ -309,11 +372,10 @@ public class MediaJobs {
         }
         String lrcText = SrtToLrc.convert(srt);
         try {
-            Path finalLrc = storage.dir("lyric").resolve(task.getSongId() + ".lrc");
-            Files.writeString(finalLrc, lrcText == null ? "" : lrcText);
+            // 落盘与歌词统一命名（{歌名}.lrc + 撞名兜底 + 回写重试）
             if (task.getSongId() != null) {
-                call(() -> music.updateLyric(Map.of("songId", task.getSongId(),
-                        "lyricUrl", storage.fileUrl("lyric", task.getSongId() + ".lrc"))));
+                saveLyric(fetchSong(task.getSongId()),
+                        "[source:subtitle]\n" + (lrcText == null ? "" : lrcText));
             }
             tasks.finish(task.getId(), "SUCCESS", null);
         } catch (Exception e) {

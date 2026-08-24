@@ -1,6 +1,7 @@
 package com.musicdreamer.media.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.musicdreamer.common.api.ErrorCode;
 import com.musicdreamer.common.exception.BizException;
 import com.musicdreamer.media.entity.MediaTask;
@@ -83,6 +84,18 @@ public class TaskManager {
     }
 
     public MediaTask submit(String type, String sourceUrl, Long songId, Long operator, String stage) {
+        // 同歌同类型已有排队/执行中的任务：直接复用——连点"获取歌词"不再堆出一串重复任务
+        if (songId != null) {
+            List<MediaTask> active = mapper.selectList(new LambdaQueryWrapper<MediaTask>()
+                    .eq(MediaTask::getTaskType, type)
+                    .eq(MediaTask::getSongId, songId)
+                    .in(MediaTask::getStatus, "PENDING", "RUNNING")
+                    .orderByDesc(MediaTask::getId)
+                    .last("LIMIT 1"));
+            if (!active.isEmpty()) {
+                return active.get(0);
+            }
+        }
         MediaTask t = new MediaTask();
         t.setTaskType(type);
         t.setStatus("PENDING");
@@ -103,6 +116,25 @@ public class TaskManager {
             throw new BizException(ErrorCode.PARAM_OUT_OF_RANGE, "任务不存在");
         }
         return t;
+    }
+
+    /** 指定用户进行中的任务（后台下载跨页恢复轮询用）。 */
+    public List<MediaTask> activeOf(Long operator) {
+        return mapper.selectList(new LambdaQueryWrapper<MediaTask>()
+                .eq(MediaTask::getOperator, operator)
+                .in(MediaTask::getStatus, "PENDING", "RUNNING")
+                .orderByDesc(MediaTask::getId));
+    }
+
+    /** 同类型同歌曲的进行中任务（重复提交去重用），无则 null。 */
+    public MediaTask activeOfType(String type, Long songId) {
+        List<MediaTask> list = mapper.selectList(new LambdaQueryWrapper<MediaTask>()
+                .eq(MediaTask::getTaskType, type)
+                .eq(MediaTask::getSongId, songId)
+                .in(MediaTask::getStatus, "PENDING", "RUNNING")
+                .orderByDesc(MediaTask::getId)
+                .last("LIMIT 1"));
+        return list.isEmpty() ? null : list.get(0);
     }
 
     /** 节流更新进度并推送 WebSocket。 */
@@ -229,9 +261,18 @@ public class TaskManager {
     }
 
     private void run(MediaTask t, Runnable release) {
+        // 原子抢占：仅当库里仍是 PENDING 才置 RUNNING。PENDING 恢复期多个 worker
+        // 可能同时领到同一任务，无条件覆写会把已完成的任务改回 RUNNING（任务 26 事故）
+        int claimed = mapper.update(null, new LambdaUpdateWrapper<MediaTask>()
+                .eq(MediaTask::getId, t.getId())
+                .eq(MediaTask::getStatus, "PENDING")
+                .set(MediaTask::getStatus, "RUNNING")
+                .set(MediaTask::getStage, t.getStage() == null ? "开始执行" : t.getStage()));
+        if (claimed != 1) {
+            release.run();
+            return;
+        }
         t.setStatus("RUNNING");
-        t.setStage(t.getStage() == null ? "开始执行" : t.getStage());
-        mapper.updateById(t);
         count("RUNNING");
         Timer.Sample sample = Timer.start(registry);
         try {

@@ -56,6 +56,15 @@ public class MediaController {
         if (!SUPPORTED.matcher(url).find()) {
             throw new BizException(ErrorCode.FILE_TYPE_UNSUPPORTED.getCode(), "不支持的链接");
         }
+        // MediaTask 表没有开关列，按 DownloadJob 既有约定把选项写进 source_url 标记，
+        // 下载完成后据此触发字幕 / 自动获取歌词后置任务。mdlyric 避开 B 站真实的
+        // ?t= 时间戳参数，防止无开关时被误判
+        if (Boolean.TRUE.equals(dto.getWantSubtitle())) {
+            url += (url.contains("?") ? "&" : "?") + "wantSubtitle=1";
+        }
+        if (Boolean.TRUE.equals(dto.getWantTranscribe())) {
+            url += (url.contains("?") ? "&" : "?") + "mdlyric=1";
+        }
         MediaTask t = tasks.submit(TaskManager.DOWNLOAD, url, null,
                 AuthContext.getUserId(), "排队中…");
         Map<String, Object> data = new HashMap<>();
@@ -136,6 +145,13 @@ public class MediaController {
         }
     }
 
+    /** 我的进行中媒体任务（前端后台下载指示器：跨页 / 刷新后恢复轮询）。 */
+    @GetMapping("/tasks/active")
+    public Mess activeTasks() {
+        Long uid = AuthContext.requireLogin();
+        return Mess.ok(tasks.activeOf(uid));
+    }
+
     @GetMapping("/task/{id}")
     public Mess task(@PathVariable Integer id) {
         AuthContext.requireLogin();
@@ -165,13 +181,33 @@ public class MediaController {
         return Mess.ok(Map.of("taskId", t.getId()));
     }
 
-    /** 一键获取歌词：在线歌词库优先（自动校准/加时间轴），无命中本地 AI 转写。 */
+    /** 一键获取歌词：在线歌词库优先（自动校准/加时间轴），无命中本地 AI 转写。
+     *  同一首歌已有进行中的获取任务时直接返回该任务——无反馈的界面会让人连点，
+     *  此前一晚就攒出过 5 条重复任务。 */
     @PostMapping("/lyrics/fetch/{songId}")
     public Mess lyricsFetch(@PathVariable Long songId) {
         AuthContext.requireUploader();
+        MediaTask existing = tasks.activeOfType(TaskManager.LYRICS_FETCH, songId);
+        if (existing != null) {
+            return Mess.ok(Map.of("taskId", existing.getId(), "deduped", true));
+        }
         MediaTask t = tasks.submit(TaskManager.LYRICS_FETCH, null, songId,
                 AuthContext.getUserId(), "获取歌词排队");
         return Mess.ok(Map.of("taskId", t.getId()));
+    }
+
+    /** 内部接口：删除歌曲的磁盘文件（音频/封面/歌词）。
+     *  供 Mod_music 删除歌曲时跨服务调用（绕网关直连本服务端口）；
+     *  经网关来的外部请求（携带用户头）必须是管理员。文件路径经存储根目录
+     *  包含校验，无法删除存储之外的任意文件。 */
+    @PostMapping("/internal/delete-files")
+    public Mess deleteFiles(@RequestBody Map<String, String> body) {
+        Long uid = AuthContext.getUserId();
+        if (uid != null && AuthContext.getRole() != AuthContext.ROLE_ADMIN) {
+            throw new BizException(ErrorCode.NO_PERMISSION);
+        }
+        int deleted = storage.deleteUnderRoot(body.get("fileUrl"), body.get("coverUrl"), body.get("lyricUrl"));
+        return Mess.ok(Map.of("deleted", deleted));
     }
 
     @PostMapping("/loudness/{songId}")

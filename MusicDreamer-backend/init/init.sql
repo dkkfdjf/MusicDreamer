@@ -326,42 +326,20 @@ CREATE TABLE sys_setting (
 -- 初始化数据
 -- ============================================================
 
--- 默认管理员：admin / admin123（BCrypt，$2b 前缀 Spring Security 兼容）
+-- 默认管理员：admin / admin123（BCrypt，$2b 前缀 Spring Security 兼容）。
+-- 不再种示例账号/示例歌曲/示例歌单：演示数据一律由使用者自行创建
 INSERT INTO user (username, password, email, nickname, role, singer_status, status) VALUES
 ('admin', '$2b$10$DsE1LUw7C9G3AMVcnNSP.OrZvYg0sTYZAme8h1v0/1SuzzmaxWdYG',
- 'admin@musicdream.com', '系统管理员', 2, 0, 1),
-('singer1', '$2b$10$DsE1LUw7C9G3AMVcnNSP.OrZvYg0sTYZAme8h1v0/1SuzzmaxWdYG',
- 'singer1@musicdream.com', '示例歌手', 1, 2, 1),
-('user1', '$2b$10$DsE1LUw7C9G3AMVcnNSP.OrZvYg0sTYZAme8h1v0/1SuzzmaxWdYG',
- 'user1@musicdream.com', '示例听众', 0, 0, 1);
-
-INSERT INTO singer_profile (user_id, stage_name, bio, verified_date, fans_count, total_plays)
-VALUES (2, '示例歌手', '课设演示账号', NOW(), 0, 0);
-
--- 示例歌曲（占位文件路径，可经管理端替换；status=2 已发布）
-INSERT INTO song (name, singer_id, album, style, language, duration, file_url, cover_url, file_format, play_count, status, source_url) VALUES
-('示例歌曲一', 2, '课设专辑', '流行', '国语', 210, '/data/music/5.mp3', '/data/image/1.jpg', 'MP3', 32, 2, NULL),
-('示例歌曲二', 2, '课设专辑', '摇滚', '国语', 245, '/data/music/7.mp3', '/data/image/2.jpg', 'MP3', 21, 2, NULL),
-('示例歌曲三', 2, '课设专辑', '民谣', '国语', 198, '/data/music/3.mp3', '/data/image/3.jpg', 'MP3', 17, 1, NULL);
-
--- 注意：歌单名不得与「收藏」概念混淆（收藏=collect 表，与歌单相互独立）
-INSERT INTO playlist (user_id, name, description, is_public) VALUES
-(3, '示例歌单', '示例公开歌单', 1);
-INSERT INTO playlist_song (playlist_id, song_id, sort_order) VALUES (1, 1, 0), (1, 2, 1);
-
-INSERT INTO play_history (user_id, song_id, play_duration, play_complete, device_type, played_at) VALUES
-(3, 1, 210, 1, 'web', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-(3, 2, 245, 1, 'web', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(3, 1, 210, 1, 'web', DATE_SUB(NOW(), INTERVAL 3 DAY));
-
-INSERT INTO comment (song_id, user_id, content, like_count) VALUES
-(1, 3, '很好听，期待更多作品！', 3);
+ 'admin@musicdream.com', '系统管理员', 2, 0, 1);
 
 INSERT INTO sys_setting (cfg_key, cfg_value) VALUES
 ('tools_path', '""'),
 ('download_proxy', '""'),
 ('cookies_path', '""'),
 ('volume_target_lufs', '"-16"'),
-('whisper_model', '"base"'),
-('storage_root', '"/data"'),
+('whisper_model', '"small"'),
+-- storage_root 必须留空：空值回退各服务 yml 默认（本机 backend/data、
+-- Docker 用 STORAGE_ROOT 环境变量）。曾种 "/data" 导致 Windows 上写进
+-- 盘符根 D:\data 而静态服务读 backend/data，音频/封面全部 404
+('storage_root', '""'),
 ('alert_email_to', '""');
