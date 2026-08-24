@@ -17,6 +17,7 @@ const routes = [
   { path: '/my/playlists', redirect: '/library?tab=playlists' },
   { path: '/recent', name: 'recent', component: () => import('../views/RecentView.vue'), meta: { requiresAuth: true } },
   { path: '/upload', name: 'upload', component: () => import('../views/UploadView.vue'), meta: { requiresAuth: true, minRole: 1 } },
+  { path: '/settings', name: 'settings', component: () => import('../views/UserSettingsView.vue'), meta: { requiresAuth: true } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, minRole: 2 } },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]

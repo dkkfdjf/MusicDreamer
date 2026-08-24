@@ -99,9 +99,15 @@ export const useTaskStore = defineStore('mediaTasks', {
     notify(t) {
       const label = this.typeLabel(t)
       if (t.status === 'SUCCESS') {
-        ElMessage.success(`${label}完成${t.musicId ? '，已入库' : ''}`)
+        ElMessage.success({
+          message: `${label}完成${t.musicId ? '，已入库' : ''}`,
+          duration: 3000  // 3秒后自动消失
+        })
       } else if (t.status === 'FAILED') {
-        ElMessage.error(`${label}失败：${t.error || '未知原因'}`)
+        ElMessage.error({
+          message: `${label}失败：${t.error || '未知原因'}`,
+          duration: 3000  // 3秒后自动消失
+        })
       }
     },
     async cancel(taskId) {
