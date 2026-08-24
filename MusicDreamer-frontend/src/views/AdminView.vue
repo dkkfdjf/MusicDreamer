@@ -64,6 +64,9 @@
       </el-tab-pane>
 
       <el-tab-pane label="用户管理" name="users">
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 12px">
+          <el-button size="small" type="primary" @click="openCreateUser">新增用户</el-button>
+        </div>
         <el-table :data="users" v-loading="loading">
           <el-table-column prop="id" label="ID" width="70" />
           <el-table-column prop="username" label="用户名" width="130" />
@@ -173,6 +176,37 @@
       <template #footer>
         <el-button @click="lyricVisible = false">取消</el-button>
         <el-button type="primary" :loading="lyricSaving" @click="saveLyric">保存歌词</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="createUserVisible" title="新增用户" width="440px">
+      <el-form :model="createUserForm" label-width="64px">
+        <el-form-item label="用户名" required>
+          <el-input v-model="createUserForm.username" placeholder="3-50 字符" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="密码" required>
+          <el-input v-model="createUserForm.password" type="password" show-password placeholder="6-64 位" />
+        </el-form-item>
+        <el-form-item label="昵称">
+          <el-input v-model="createUserForm.nickname" placeholder="留空则同用户名" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="createUserForm.email" placeholder="可选，留空自动占位" />
+        </el-form-item>
+        <el-form-item label="角色" required>
+          <el-select v-model="createUserForm.role" style="width: 100%">
+            <el-option label="听众" :value="0" />
+            <el-option label="歌手（直接认证通过）" :value="1" />
+            <el-option label="管理员" :value="2" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div style="font-size:12px;color:var(--text-muted)">
+        管理员创建的账号跳过邮件激活、直接可用；歌手角色会同步补写歌手资料
+      </div>
+      <template #footer>
+        <el-button @click="createUserVisible = false">取消</el-button>
+        <el-button type="primary" :loading="creatingUser" @click="submitCreateUser">创建</el-button>
       </template>
     </el-dialog>
   </div>
@@ -330,6 +364,36 @@ async function toggleUser(row) {
   await api.setUserStatus({ userId: row.id, status: row.status === 1 ? 0 : 1 })
   message.success('已更新')
   load()
+}
+
+const createUserVisible = ref(false)
+const creatingUser = ref(false)
+const createUserForm = ref({ username: '', password: '', nickname: '', email: '', role: 0 })
+
+function openCreateUser() {
+  createUserForm.value = { username: '', password: '', nickname: '', email: '', role: 0 }
+  createUserVisible.value = true
+}
+
+async function submitCreateUser() {
+  const f = createUserForm.value
+  if (!f.username || f.username.trim().length < 3) return message.warning('用户名至少 3 个字符')
+  if (!f.password || f.password.length < 6) return message.warning('密码至少 6 位')
+  creatingUser.value = true
+  try {
+    await api.createUser({
+      username: f.username.trim(),
+      password: f.password,
+      nickname: f.nickname.trim() || undefined,
+      email: f.email.trim() || undefined,
+      role: f.role
+    })
+    message.success('账号已创建，可直接登录')
+    createUserVisible.value = false
+    load()
+  } finally {
+    creatingUser.value = false
+  }
 }
 
 async function singerAudit(row, pass) {

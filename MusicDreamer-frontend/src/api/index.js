@@ -105,6 +105,7 @@ export const api = {
   // ---------- 用户管理（管理员） ----------
   userList: (params) => get('/user/list', params),
   setUserStatus: (data) => post('/user/status', data),
+  createUser: (data) => post('/user/create', data),
 
   // ---------- 歌曲 ----------
   songSubmit: (data) => post('/song/submit', data),
