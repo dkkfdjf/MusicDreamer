@@ -136,7 +136,14 @@ function scrollToActive(smooth) {
 
 watch(activeIdx, () => scrollToActive(true))
 watch(() => lyrics.panelOpen, async (open) => {
-  if (open) { await nextTick(); scrollToActive(false) }
+  if (!open) return
+  await nextTick()
+  scrollToActive(false)
+  // 打开时还没有歌词则重查一次：歌词可能在面板关闭期间获取完成，
+  // lyricUrl 是后来才回写的，换歌 watcher 当时已经跑过、不会再触发
+  if (!lyrics.hasLyrics && !lyrics.loading && player.current) {
+    lyrics.loadForSong(player.current)
+  }
 })
 
 /* ---------- 点击歌词行跳转播放进度 ---------- */

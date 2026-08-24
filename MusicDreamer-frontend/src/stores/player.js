@@ -156,6 +156,18 @@ export const usePlayerStore = defineStore('player', {
         if (seq === playSeq) {
           a.pause()
           this.playing = false
+          // 歌曲已被删除（清库/管理端删除）时从队列摘除并自动播下一首，
+          // 否则"幽灵曲目"会一直挂在底部栏：有歌名、无封面、放不出来
+          const gone = e && /不存在|已下架|审核中/.test(e.message || '')
+          if (gone && this.queue[index] && this.queue[index].id === song.id) {
+            this.queue.splice(index, 1)
+            if (this.queue.length) {
+              this.playAt(Math.min(index, this.queue.length - 1))
+            } else {
+              this.stop(true)
+            }
+            return
+          }
         }
       } finally {
         if (seq === playSeq) this.loading = false

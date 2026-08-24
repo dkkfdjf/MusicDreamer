@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// 后端网关运行在 80 端口（docker-compose: gateway -> 80）
+// 开发代理指向本地网关 :8080（docker-compose 与本机 java -jar 均为此端口）
 // '/data' 为后端静态资源（音频/封面）路径，见 init.sql 示例 file_url=/data/music/x.mp3
 export default defineConfig({
   plugins: [vue()],
