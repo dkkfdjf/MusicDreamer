@@ -29,14 +29,23 @@ export const useLyricsStore = defineStore('lyrics', {
   actions: {
     togglePanel() { this.panelOpen = !this.panelOpen },
 
-    /** 换歌时加载：拉 LRC 文本 → 健壮解析。无歌词静默置空。 */
+    /** 换歌时加载：拉 LRC 文本 → 健壮解析。无歌词静默置空。
+     *  列表卡片查询普遍不带 lyric_url 列（播放接口才有），行内缺字段时
+     *  先查一次详情自愈——否则面板永远停在"没有歌词"。 */
     async loadForSong(song) {
       this.stopPoll()
       this.fetchTask = null
       this.songId = song ? song.id : null
       this.lines = []
       this.source = ''
-      if (!song || !song.lyricUrl) return
+      if (!song) return
+      if (!song.lyricUrl) {
+        try {
+          const d = await api.songDetail(song.id)
+          if (d && d.lyricUrl) song.lyricUrl = d.lyricUrl
+        } catch (e) { /* 详情失败按无歌词处理 */ }
+      }
+      if (!song.lyricUrl) return
       this.loading = true
       try {
         const res = await fetch(resolveFileUrl(song.lyricUrl))
@@ -54,9 +63,10 @@ export const useLyricsStore = defineStore('lyrics', {
     async startFetch() {
       if (!this.songId || this.fetchTask) return
       try {
+        // 拦截器直接返回 data（{taskId, deduped?}），不再包一层 r.data
         const r = await api.lyricsFetch(this.songId)
-        if (r.data && r.data.taskId) {
-          this.fetchTask = { id: r.data.taskId, status: 'RUNNING', progress: 0, stage: '' }
+        if (r && r.taskId) {
+          this.fetchTask = { id: r.taskId, status: 'RUNNING', progress: 0, stage: r.deduped ? '已有任务进行中，复用…' : '' }
           this.poll()
         }
       } catch (e) {
@@ -69,20 +79,18 @@ export const useLyricsStore = defineStore('lyrics', {
       this._pollTimer = setInterval(async () => {
         if (!this.fetchTask) return this.stopPoll()
         try {
-          const r = await api.mediaTask(this.fetchTask.id)
-          const t = r.data || {}
+          const t = (await api.mediaTask(this.fetchTask.id)) || {}
           this.fetchTask.status = t.status
           this.fetchTask.progress = t.progress || 0
           this.fetchTask.stage = t.stage || ''
           if (t.status === 'SUCCESS' || t.status === 'FAILED' || t.status === 'CANCELLED') {
-            const done = this.fetchTask
             this.stopPoll()
             // 成功后重载当前曲歌词
             if (t.status === 'SUCCESS' && this._currentSong) {
               // lyric_url 可能刚被回写，重新取详情
               try {
                 const d = await api.songDetail(this.songId)
-                if (d.data) this._currentSong.lyricUrl = d.data.lyricUrl
+                if (d) this._currentSong.lyricUrl = d.lyricUrl || this._currentSong.lyricUrl
               } catch (e) { /* 忽略 */ }
               await this.loadForSong(this._currentSong)
             }

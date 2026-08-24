@@ -159,6 +159,11 @@ watch(() => player.playing, () => {
   }
 })
 
+// 换曲重置封面加载失败标记：否则一首封面 404 后整个会话都不再显示任何封面
+watch(() => player.current && player.current.id, () => {
+  coverFail.value = false
+})
+
 /* ---------- 播放能量 → 呼吸辉光（Web Audio Analyser，真音频数据） ----------
    进度条本身用普通轨道；频谱可视化在首页 hero。这里只保留：
    全局 Analyser 单例读取整体能量，驱动底栏上缘的三色呼吸光。 */

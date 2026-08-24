@@ -61,7 +61,7 @@
             </el-form-item>
             <el-form-item label="选项">
               <el-checkbox v-model="link.wantSubtitle">尝试下载字幕</el-checkbox>
-              <el-checkbox v-model="link.wantTranscribe">AI 转写歌词（需先下载模型）</el-checkbox>
+              <el-checkbox v-model="link.wantTranscribe">自动获取歌词（在线匹配优先，无命中时本地 AI 转写）</el-checkbox>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :disabled="!link.url || running" @click="startDownload">开始导入</el-button>
@@ -78,7 +78,7 @@
             <div v-if="task.error" class="task-error">错误：{{ task.error }}</div>
             <el-button v-if="task.status === 'SUCCESS' && task.musicId" size="small" type="success"
               @click="$router.push('/')">
-              已入库（待审核），去首页看看
+              已入库，去首页看看
             </el-button>
           </div>
         </el-card>
@@ -115,11 +115,12 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { message } from '../utils/feedback'
 import api from '../api'
 import { listOf, SONG_STATUS, STYLES, LANGUAGES, isTaskTerminal } from '../utils'
 import { useUserStore } from '../stores/user'
+import { useTaskStore } from '../stores/tasks'
 
 const userStore = useUserStore()
 const isAdmin = userStore.role === 2
@@ -133,11 +134,26 @@ const pickedCover = ref(null)
 const pickedLyric = ref(null)
 const uploading = ref(false)
 
-const link = ref({ url: '', singerName: '', wantSubtitle: true, wantTranscribe: false })
+// 自动获取歌词默认开启：在线歌词库优先，无命中本地 AI 转写
+const link = ref({ url: '', singerName: '', wantSubtitle: true, wantTranscribe: true })
 const task = ref(null)
-const running = ref(false)
-let timer = null
 let singerApplied = false
+const taskStore = useTaskStore()
+// 任务轮询在全局 store（切页后仍跟踪，右下角悬浮指示器可见），此处只引用展示
+const running = computed(() => !!task.value && !isTaskTerminal(task.value.status))
+
+// 任务结束时回填歌手名（管理员导入他人作品的场景）
+watch(() => task.value && task.value.status, (status) => {
+  if (!status || !isTaskTerminal(status)) return
+  const name = (link.value.singerName || '').trim()
+  if (status === 'SUCCESS' && task.value.musicId && name && !singerApplied) {
+    singerApplied = true
+    api.songEdit(task.value.musicId, { singerName: name })
+      .then(() => message.success(`歌手名已回填：${name}`))
+      .catch(() => message.warning('歌手名回填失败，可在首页编辑歌曲信息补填'))
+  }
+  loadMine()
+})
 
 const mine = ref([])
 const mineLoading = ref(false)
@@ -221,40 +237,12 @@ function extractUrl(text) {
 
 async function startDownload() {
   const data = await api.mediaDownload({ ...link.value, url: extractUrl(link.value.url) })
-  task.value = { taskId: data.taskId, status: 'PENDING', progress: 0, stage: '已提交…' }
-  running.value = true
-  timer = setInterval(poll, 1000)
-}
-
-async function poll() {
-  if (!task.value) return
-  try {
-    task.value = await api.mediaTask(task.value.taskId)
-  } catch (e) {
-    return
-  }
-  if (isTaskTerminal(task.value.status)) {
-    clearInterval(timer)
-    timer = null
-    running.value = false
-    // 管理员导入他人作品：任务成功后把填写的原始歌手名回填到歌曲
-    const name = (link.value.singerName || '').trim()
-    if (task.value.status === 'SUCCESS' && task.value.musicId && name && !singerApplied) {
-      singerApplied = true
-      api.songEdit(task.value.musicId, { singerName: name })
-        .then(() => message.success(`歌手名已回填：${name}`))
-        .catch(() => message.warning('歌手名回填失败，可在首页编辑歌曲信息补填'))
-    }
-    loadMine()
-  }
+  // 登记进全局任务 store：切页后由 store 继续轮询并通知结果
+  task.value = taskStore.track(data.taskId, 'DOWNLOAD')
 }
 
 async function cancel() {
-  await api.mediaCancel(task.value.taskId)
-  clearInterval(timer)
-  timer = null
-  running.value = false
-  poll()
+  await taskStore.cancel(task.value.taskId)
 }
 
 async function resubmit(row) {
@@ -279,8 +267,6 @@ const taskTag = () => {
   if (s === 'CANCELLED') return 'info'
   return 'warning'
 }
-
-onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 </script>
 
 <style scoped>

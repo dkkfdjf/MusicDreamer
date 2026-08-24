@@ -198,7 +198,10 @@ export const api = {
 
   // ---------- 媒体任务 ----------
   mediaDownload: (data) => post('/media/download', data),
-  mediaTask: (id) => get(`/media/task/${id}`),
+  // 轮询类请求 noRedirect 静默：服务重启窗口的偶发失败不该每 1.2s 弹一次"网络错误"
+  mediaTask: (id) => get(`/media/task/${id}`, null, { noRedirect: true }),
+  // 我的进行中媒体任务（后台下载跨页/刷新恢复轮询）
+  mediaActiveTasks: () => get('/media/tasks/active', null, { noRedirect: true }),
   mediaCancel: (id) => post(`/media/task/${id}/cancel`),
   mediaTranscribe: (songId) => post(`/media/transcribe/${songId}`),
   // 一键获取歌词：在线歌词库优先（自动校准/加时间轴），无命中本地 AI 转写

@@ -342,6 +342,8 @@ select {
   color: #fff;
   font-size: 30px;
   overflow: hidden;
+  /* GenCover 是 absolute inset:0，父盒必须自身定位，否则会挣脱卡片铺满整个页面 */
+  position: relative;
 }
 .pl-card .pl-name {
   font-weight: 700;

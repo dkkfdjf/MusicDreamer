@@ -47,6 +47,7 @@
         </div>
       </div>
       <PlayerBar />
+      <TaskFloat />
     </div>
     <SingerApplyDialog v-model="applyVisible" />
   </template>
@@ -60,14 +61,17 @@ import SideNav from './components/SideNav.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import LyricsPanel from './components/LyricsPanel.vue'
 import SingerApplyDialog from './components/SingerApplyDialog.vue'
+import TaskFloat from './components/TaskFloat.vue'
 import api from './api'
 import { usePlayerStore } from './stores/player'
 import { useUserStore } from './stores/user'
+import { useTaskStore } from './stores/tasks'
 
 const route = useRoute()
 const router = useRouter()
 const player = usePlayerStore()
 const user = useUserStore()
+const taskStore = useTaskStore()
 const keyword = ref('')
 const applyVisible = ref(false)
 
@@ -115,6 +119,8 @@ onMounted(() => {
   if (user.isLogin) {
     user.refreshInfo()
     user.loadCollectIds()
+    // 恢复后台下载跟踪：刷新/重开页面后继续轮询进行中的媒体任务
+    taskStore.restore()
   }
 })
 </script>

@@ -137,6 +137,15 @@ export const usePlayerStore = defineStore('player', {
           ElMessage.error('未获取到播放地址')
           return
         }
+        // 播放视图带回完整元数据（coverUrl/lyricUrl 等），合并进队列行：
+        // 收藏/最近播放/歌单等列表查询不含封面列，底部栏与歌词面板也能正常显示
+        if (data && typeof data === 'object') {
+          if (data.coverUrl) song.coverUrl = data.coverUrl
+          if (data.lyricUrl) song.lyricUrl = data.lyricUrl
+          if (data.name) song.name = data.name
+          if (data.singer) song.singer = data.singer
+          if (data.duration) song.duration = data.duration
+        }
         if (data.volumeGain !== null && data.volumeGain !== undefined && data.volumeGain !== '') {
           this.volumeGain = Number(data.volumeGain)
         }
