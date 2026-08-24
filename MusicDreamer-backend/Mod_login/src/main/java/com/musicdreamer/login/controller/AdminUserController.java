@@ -2,6 +2,7 @@ package com.musicdreamer.login.controller;
 
 import com.musicdreamer.common.api.Mess;
 import com.musicdreamer.common.auth.AuthContext;
+import com.musicdreamer.login.dto.AdminCreateUserDTO;
 import com.musicdreamer.login.dto.UserStatusDTO;
 import com.musicdreamer.login.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -37,5 +38,12 @@ public class AdminUserController {
         AuthContext.requireAdmin();
         userService.updateStatus(dto);
         return Mess.ok();
+    }
+
+    /** 直接创建账号（跳过注册与邮件激活；歌手角色直接认证通过）。 */
+    @PostMapping("/create")
+    public Mess create(@Valid @RequestBody AdminCreateUserDTO dto) {
+        AuthContext.requireAdmin();
+        return Mess.ok(userService.adminCreate(dto));
     }
 }

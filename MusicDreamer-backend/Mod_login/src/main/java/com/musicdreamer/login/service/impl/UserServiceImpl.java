@@ -5,28 +5,37 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.musicdreamer.common.api.ErrorCode;
 import com.musicdreamer.common.exception.BizException;
+import com.musicdreamer.login.dto.AdminCreateUserDTO;
 import com.musicdreamer.login.dto.UpdateUserInfoDTO;
 import com.musicdreamer.login.dto.UserStatusDTO;
+import com.musicdreamer.login.entity.SingerProfile;
 import com.musicdreamer.login.entity.User;
+import com.musicdreamer.login.mapper.SingerProfileMapper;
 import com.musicdreamer.login.mapper.UserMapper;
 import com.musicdreamer.login.service.UserService;
 import com.musicdreamer.login.vo.UserBriefVO;
 import com.musicdreamer.login.vo.UserVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
+    private final SingerProfileMapper profileMapper;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserVO info(Long userId) {
@@ -89,6 +98,45 @@ public class UserServiceImpl implements UserService {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, dto.getUserId())
                 .set(User::getStatus, dto.getStatus()));
+    }
+
+    @Override
+    public Long adminCreate(AdminCreateUserDTO dto) {
+        if (dto.getRole() == null || dto.getRole() < 0 || dto.getRole() > 2) {
+            throw new BizException(ErrorCode.PARAM_OUT_OF_RANGE.getCode(), "role 仅允许 0(听众) 1(歌手) 2(管理员)");
+        }
+        if (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername())) > 0) {
+            throw new BizException(ErrorCode.USERNAME_EXISTS);
+        }
+        String email = StringUtils.hasText(dto.getEmail()) ? dto.getEmail().trim()
+                : dto.getUsername() + "@musicdream.local";
+        if (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getEmail, email)) > 0) {
+            throw new BizException(ErrorCode.USERNAME_EXISTS, "邮箱已被使用");
+        }
+
+        User user = new User();
+        user.setUsername(dto.getUsername());
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setEmail(email);
+        user.setNickname(StringUtils.hasText(dto.getNickname()) ? dto.getNickname() : dto.getUsername());
+        user.setRole(dto.getRole());
+        // 管理员创建即直接可用（跳过邮件激活）；歌手账号直接视为认证通过
+        user.setSingerStatus(dto.getRole() == 1 ? 2 : 0);
+        user.setStatus(1);
+        userMapper.insert(user);
+
+        if (dto.getRole() == 1 && profileMapper.selectCount(new LambdaQueryWrapper<SingerProfile>()
+                .eq(SingerProfile::getUserId, user.getId())) == 0) {
+            SingerProfile profile = new SingerProfile();
+            profile.setUserId(user.getId());
+            profile.setStageName(user.getNickname());
+            profile.setVerifiedDate(LocalDateTime.now());
+            profile.setFansCount(0);
+            profile.setTotalPlays(0L);
+            profileMapper.insert(profile);
+        }
+        log.info("管理员创建账号 userId={} username={} role={}", user.getId(), user.getUsername(), dto.getRole());
+        return user.getId();
     }
 
     @Override

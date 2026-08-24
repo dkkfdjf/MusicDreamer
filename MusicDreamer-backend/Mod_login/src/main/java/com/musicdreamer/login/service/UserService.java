@@ -1,5 +1,6 @@
 package com.musicdreamer.login.service;
 
+import com.musicdreamer.login.dto.AdminCreateUserDTO;
 import com.musicdreamer.login.dto.UpdateUserInfoDTO;
 import com.musicdreamer.login.dto.UserStatusDTO;
 import com.musicdreamer.login.vo.UserBriefVO;
@@ -21,6 +22,9 @@ public interface UserService {
 
     /** 管理端禁用/启用用户。 */
     void updateStatus(UserStatusDTO dto);
+
+    /** 管理端直接创建账号（跳过邮件激活；歌手角色直接认证通过并补 singer_profile）。返回新用户 ID。 */
+    Long adminCreate(AdminCreateUserDTO dto);
 
     /** 内部调用：用户简要信息。 */
     UserBriefVO brief(Long userId);
