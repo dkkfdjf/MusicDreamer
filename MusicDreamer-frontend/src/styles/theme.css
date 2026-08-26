@@ -156,3 +156,15 @@ body[data-weui-theme='light'] {
 .display {
   font-family: var(--font-display);
 }
+
+/* 弹窗遮罩（bug6）：默认黑灰压场太重，改浅暖色 + 毛玻璃，
+ * 与整站浅色基调一致；el-overlay 可能挂在 body 下，必须全局声明 */
+.el-overlay {
+  background-color: rgba(246, 243, 237, 0.68);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.el-overlay .el-dialog {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}

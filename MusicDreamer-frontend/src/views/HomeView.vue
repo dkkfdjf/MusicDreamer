@@ -187,8 +187,19 @@ function onCoverClick(idx) {
 }
 const echoOn = computed(() => playerStore.playing)
 
-watch(heroSongs, (v) => {
+// bug15：正在播放的歌若在轮播候选里，三张主封面同步聚焦到它
+function syncFocusToPlaying() {
+  const id = playerStore.current && playerStore.current.id
+  if (id == null) return
+  const idx = heroSongs.value.findIndex((s) => Number(s.id) === Number(id))
+  if (idx >= 0) focusIdx.value = idx
+}
+watch(() => playerStore.current && playerStore.current.id, syncFocusToPlaying, { immediate: true })
+
+watch(heroSongs, () => {
   focusIdx.value = 0
+  // 换榜/切分类后列表重排，重新对焦到正在播放的歌（还在候选内时）
+  syncFocusToPlaying()
 })
 
 /* ---------- GSAP 入场 + 签名实时频谱（Web Audio 真音频驱动） ---------- */
@@ -256,7 +267,7 @@ function drawSpectrum() {
 watch(echoOn, (on) => {
   if (on && !prefersReduced) specAnalyser = getAnalyser(getAudioEl())
   if (!specRaf && !prefersReduced) specRaf = requestAnimationFrame(drawSpectrum)
-})
+}, { immediate: true }) // bug13：切页回来时 playing 已是 true 不触发 watch，immediate 补挂分析器
 
 onMounted(async () => {
   await nextTick()

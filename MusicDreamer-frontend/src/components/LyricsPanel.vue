@@ -172,8 +172,13 @@ watch(() => player.current && player.current.id, async (id, old) => {
     await lyrics.loadForSong(player.current)
   }
 }, { immediate: true })
-watch(() => player.current && player.current.lyricUrl, () => {
+watch(() => player.current && player.current.lyricUrl, (u, old) => {
   lyrics.setCurrentSong(player.current)
+  // 歌词地址后到（换歌时播放接口尚未返回、稍后才回填 lyricUrl）：
+  // 必须触发加载，否则面板停在"无歌词"，又要手动一键获取（bug20）
+  if (u && u !== old && !lyrics.hasLyrics && !lyrics.loading) {
+    lyrics.loadForSong(player.current)
+  }
 })
 </script>
 

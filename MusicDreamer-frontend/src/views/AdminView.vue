@@ -297,6 +297,12 @@
       </el-upload>
       <el-input v-model="lyricText" type="textarea" :rows="12" style="margin-top:10px"
         placeholder="粘贴歌词文本，或选截图自动识别；支持 LRC 时间轴格式 [mm:ss.xx] 歌词" />
+      <!-- bug8：在线词库来源复盘——lrclib 记录 id + 原始链接 -->
+      <div v-if="lyricSource" style="font-size:12px;color:var(--text-muted);margin-top:6px">
+        来源：在线词库 LRCLIB · 记录
+        <a :href="lyricSource.url || ('https://lrclib.net/api/get/' + lyricSource.id)"
+          target="_blank" rel="noopener" style="color:var(--accent)">#{{ lyricSource.id }}</a>
+      </div>
       <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
         保存后生成 .lrc 文件并绑定到该歌曲，播放页与桌面歌词即可展示
       </div>
@@ -384,17 +390,25 @@ const lyricText = ref('')
 const lyricSong = ref(null)
 const lyricSaving = ref(false)
 const ocrRunning = ref(false)
+// bug8：歌词来源（在线词库命中时记录 lrclib id，可复盘原始数据）
+const lyricSource = ref(null)
 
 async function lyric(row) {
   lyricSong.value = row
   lyricText.value = ''
+  lyricSource.value = null
   lyricVisible.value = true
-  // 已有歌词先拉回编辑
+  // 已有歌词先拉回编辑；同时展示来源（lrclib 命中记录带 id/链接）
   try {
     const d = await api.songDetail(row.id)
-    if (d && d.lyricUrl) {
-      const res = await fetch(resolveFileUrl(d.lyricUrl))
-      if (res.ok) lyricText.value = await res.text()
+    if (d) {
+      lyricSource.value = d.lyricSourceId
+        ? { id: d.lyricSourceId, url: d.lyricSourceUrl }
+        : null
+      if (d.lyricUrl) {
+        const res = await fetch(resolveFileUrl(d.lyricUrl))
+        if (res.ok) lyricText.value = await res.text()
+      }
     }
   } catch (e) { /* 无歌词忽略 */ }
 }
@@ -646,7 +660,9 @@ function pollInstallTask(taskId, name, doneMsg) {
   stopToolInstall()
   toolInstallTimer = setInterval(async () => {
     try {
-      const t = (await api.mediaTask(taskId)).data || {}
+      // 拦截器已剥掉一层 data：这里再取 .data 永远是 undefined，
+      // 轮询就停在"已提交…"（bug20 后台任务不稳定的原因之一）
+      const t = (await api.mediaTask(taskId)) || {}
       toolInstall.value.stage = t.stage || toolInstall.value.stage
       if (t.status === 'SUCCESS') {
         stopToolInstall()
@@ -662,14 +678,14 @@ function pollInstallTask(taskId, name, doneMsg) {
 
 async function installTool(row) {
   const r = await api.toolInstall(row.name)
-  if (!r.data || !r.data.taskId) return
-  pollInstallTask(r.data.taskId, row.name, row.name + ' 已就绪')
+  if (!r || !r.taskId) return
+  pollInstallTask(r.taskId, row.name, row.name + ' 已就绪')
 }
 
 async function downloadModel(row) {
   const r = await api.modelDownload(row.key)
-  if (!r.data || !r.data.taskId) return
-  pollInstallTask(r.data.taskId, row.key, '模型 ' + row.key + ' 已就绪')
+  if (!r || !r.taskId) return
+  pollInstallTask(r.taskId, row.key, '模型 ' + row.key + ' 已就绪')
 }
 
 // ---------- 听歌识曲指纹库 ----------

@@ -56,7 +56,8 @@ export const usePlayerStore = defineStore('player', {
     dragging: false, // 进度条拖拽中，暂停 timeupdate 回写
     rate: 1, // 播放倍速
     abA: null, // A-B 复读起点（秒）
-    abB: null // A-B 复读终点（秒）
+    abB: null, // A-B 复读终点（秒）
+    currentReported: false // 当前曲是否已上报播放（防 ended 与切歌补报双计）
   }),
   getters: {
     current: (s) => s.queue[s.currentIndex] || null,
@@ -118,6 +119,7 @@ export const usePlayerStore = defineStore('player', {
     },
     async playAt(index) {
       if (index < 0 || index >= this.queue.length) return
+      this.flushReport() // 切歌前给上一首补报（bug2：否则没播完的歌永远进不了最近播放）
       const song = this.queue[index]
       const a = getAudio()
       const seq = ++playSeq
@@ -125,6 +127,7 @@ export const usePlayerStore = defineStore('player', {
       this.currentTime = 0
       this.duration = Number(song.duration) || 0
       this.volumeGain = null
+      this.currentReported = false
       this.loading = true
       try {
         const data = await api.songPlay(song.id)
@@ -288,6 +291,7 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     stop(keepQueue = false) {
+      this.flushReport() // 停止前补报，再作废在途请求（顺序不能反：flush 要读旧曲目与进度）
       playSeq++ // 使在途的播放请求作废（否则停止后慢响应又会把歌放出来）
       const a = getAudio()
       a.pause()
@@ -301,12 +305,27 @@ export const usePlayerStore = defineStore('player', {
       this.clearAb()
       if (!keepQueue) this.queue = []
     },
+    // 切歌/停止时补报上一首：听过 30 秒或过半即视为有效播放（bug2）
+    flushReport() {
+      const song = this.queue && this.queue[this.currentIndex]
+      if (!song || this.currentReported) return
+      const a = getAudio()
+      const played = Math.round(a.currentTime || this.currentTime || 0)
+      const dur = Number(this.duration || song.duration) || 0
+      if (played <= 0 || (played < 30 && (dur <= 0 || played < dur * 0.5))) return
+      this.currentReported = true
+      const user = useUserStore()
+      if (user.isLogin) {
+        api.playReport({ songId: song.id, playDuration: played }).catch(() => {})
+      }
+    },
     async handleEnded() {
       const song = this.current
       const a = getAudio()
       const played = Math.round(a.currentTime || this.duration || 0)
       // 播完才上报：{ songId, playDuration }
       if (song) {
+        this.currentReported = true
         const user = useUserStore()
         if (user.isLogin) {
           api.playReport({ songId: song.id, playDuration: played }).catch(() => {})

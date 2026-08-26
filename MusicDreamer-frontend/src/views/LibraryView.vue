@@ -181,11 +181,17 @@ const collectedEl = ref(null)
 
 async function create() {
   if (!form.value.name) return message.warning('请输入歌单名称')
-  await api.createPlaylist(form.value)
+  const data = await api.createPlaylist(form.value)
   message.success('歌单已创建')
   window.dispatchEvent(new Event('md-playlists-changed'))
   createVisible.value = false
   form.value = { name: '', description: '', isPublic: true }
+  // 直接跳进新歌单去选歌（bug3：新建后无处加歌）
+  const newId = data && (data.playlistId || data.id)
+  if (newId) {
+    router.push('/playlist/' + newId)
+    return
+  }
   loadPlaylists()
 }
 

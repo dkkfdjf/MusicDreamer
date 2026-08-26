@@ -25,6 +25,7 @@
             {{ favorited ? '取消收藏' : '收藏歌单' }}
           </button>
           <button v-if="isOwner" class="btn btn-secondary" @click="openEdit">编辑信息</button>
+          <button v-if="isOwner" class="btn btn-secondary" @click="addVisible = true">添加歌曲</button>
           <button v-if="isOwner" class="btn btn-danger" @click="remove">删除歌单</button>
         </div>
       </div>
@@ -42,11 +43,25 @@
 
     <div v-if="!songs.length && !loading" class="empty-state">
       <h3>{{ loadError || '歌单还没有歌曲' }}</h3>
-      <p>{{ loadError ? '请稍后重试，或联系管理员检查音乐服务。' : '在首页找到喜欢的歌，加入这个歌单吧' }}</p>
-      <button class="btn btn-primary" @click="loadError ? load() : $router.push('/')">
-        {{ loadError ? '重新加载' : '去首页选歌' }}
+      <p>{{ loadError ? '请稍后重试，或联系管理员检查音乐服务。' : (isOwner ? '点上方"添加歌曲"把喜欢的歌收进来' : '歌单主人还没收录歌曲') }}</p>
+      <button class="btn btn-primary" @click="loadError ? load() : (isOwner ? (addVisible = true) : $router.push('/'))">
+        {{ loadError ? '重新加载' : (isOwner ? '添加歌曲' : '去首页逛逛') }}
       </button>
     </div>
+
+    <!-- 主人添加歌曲：从全站曲库挑选（bug3，弹窗与专辑页同款） -->
+    <el-dialog v-model="addVisible" title="添加歌曲到歌单" width="480px">
+      <el-input v-model="pickKeyword" placeholder="搜索歌名 / 歌手" clearable style="margin-bottom: 10px" />
+      <div class="pick-list">
+        <div v-for="s in pickSongs" :key="s.id" class="pick-row">
+          <span class="pick-name">{{ s.name }}</span>
+          <span class="pick-artist">{{ singerName(s) }}</span>
+          <el-button v-if="!songIds.has(s.id)" size="small" type="primary" plain @click="addSong(s)">加入</el-button>
+          <el-button v-else size="small" disabled>已在歌单</el-button>
+        </div>
+        <div v-if="!pickSongs.length && !pickLoading" class="pick-empty">没有可添加的歌曲</div>
+      </div>
+    </el-dialog>
 
     <!-- 编辑歌单信息（仅创建者）：改名/描述/公开开关 -->
     <el-dialog v-model="editVisible" title="编辑歌单信息" width="420px">
@@ -75,7 +90,7 @@ import { useUserStore } from '../stores/user'
 import { usePlayerStore } from '../stores/player'
 import SongGrid from '../components/SongGrid.vue'
 import GenCover from '../components/GenCover.vue'
-import { playlistSongs, resolveFileUrl } from '../utils'
+import { playlistSongs, resolveFileUrl, singerName, pageOf } from '../utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,6 +107,7 @@ const editForm = ref({ name: '', description: '', isPublic: true })
 
 const isOwner = computed(() =>
   userStore.isLogin && playlist.value && Number(playlist.value.userId) === Number(userStore.userId))
+const songIds = computed(() => new Set(songs.value.map((s) => Number(s.id))))
 
 async function load() {
   loading.value = true
@@ -159,6 +175,40 @@ async function saveEdit() {
   } finally {
     saving.value = false
   }
+}
+
+/* 添加歌曲弹窗：搜索全站歌曲 */
+const addVisible = ref(false)
+const pickKeyword = ref('')
+const pickSongs = ref([])
+const pickLoading = ref(false)
+let pickTimer = null
+
+watch(addVisible, (open) => {
+  if (open) loadPick()
+})
+watch(pickKeyword, () => {
+  clearTimeout(pickTimer)
+  pickTimer = setTimeout(loadPick, 300)
+})
+
+async function loadPick() {
+  pickLoading.value = true
+  try {
+    const data = pickKeyword.value
+      ? await api.searchSongs({ keyword: pickKeyword.value, page: 1, size: 30 })
+      : await api.searchByStyle({ page: 1, size: 30 })
+    pickSongs.value = pageOf(data).list
+  } finally {
+    pickLoading.value = false
+  }
+}
+
+async function addSong(s) {
+  await api.addPlaylistSong(route.params.id, s.id)
+  message.success(`已加入《${s.name}》`)
+  window.dispatchEvent(new Event('md-playlists-changed'))
+  load()
 }
 
 watch(() => route.params.id, load, { immediate: true })
@@ -279,6 +329,45 @@ watch(() => route.params.id, load, { immediate: true })
 }
 .empty-state .btn {
   margin-top: 14px;
+}
+
+/* 添加歌曲弹窗（与专辑页同款） */
+.pick-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+}
+.pick-row:hover {
+  background: var(--surface-2);
+}
+.pick-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pick-artist {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.pick-empty {
+  text-align: center;
+  color: var(--text-faint);
+  padding: 20px 0;
+  font-size: 13px;
 }
 
 @media (max-width: 720px) {

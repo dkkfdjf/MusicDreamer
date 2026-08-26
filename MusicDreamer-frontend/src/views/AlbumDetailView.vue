@@ -1,6 +1,6 @@
 <template>
   <div class="al-detail" v-loading="loading">
-    <div class="al-head" v-if="album">
+    <div class="al-head" v-if="album" :style="headTint ? { background: headTint.bg } : {}" :class="{ tinted: !!headTint }">
       <div class="al-cover">
         <el-image v-if="album.coverUrl" :src="resolveFileUrl(album.coverUrl)" fit="cover"
           style="width: 100%; height: 100%">
@@ -68,8 +68,9 @@ import api from '../api'
 import { useUserStore } from '../stores/user'
 import { usePlayerStore } from '../stores/player'
 import SongGrid from '../components/SongGrid.vue'
-import { resolveFileUrl, singerName, pageOf } from '../utils'
+import { resolveFileUrl, singerName, pageOf, playlistSongs } from '../utils'
 import GenCover from '../components/GenCover.vue'
+import { coverTint } from '../utils/color'
 
 const route = useRoute()
 const router = useRouter()
@@ -85,14 +86,22 @@ const isOwner = computed(() =>
   userStore.isLogin && album.value && Number(album.value.userId) === Number(userStore.userId))
 const songIds = computed(() => new Set(songs.value.map((s) => Number(s.id))))
 
+// 头部主色背景（bug18）：从专辑封面（后端自动取最新歌曲封面）提取浅色渐变
+const headTint = ref(null)
+
 async function load() {
   loading.value = true
   loadError.value = ''
   try {
     const data = await api.albumDetail(route.params.id)
     album.value = (data && data.album) || data
-    songs.value = (data && data.songs) || []
+    // 专辑歌曲行是关联表行（songId），映射成统一 id（bug5：否则移除/播放拿不到 row.id）
+    songs.value = playlistSongs(data)
     favorited.value = !!(album.value && album.value.favored)
+    headTint.value = null
+    if (album.value && album.value.coverUrl) {
+      coverTint(resolveFileUrl(album.value.coverUrl)).then((t) => { if (t) headTint.value = t })
+    }
   } catch (e) {
     album.value = null
     songs.value = []
@@ -168,8 +177,15 @@ watch(() => route.params.id, load, { immediate: true })
 .al-head {
   display: flex;
   gap: 24px;
-  padding: 30px 0 24px;
+  padding: 30px 24px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-lg);
   align-items: flex-end;
+}
+/* 主色头部（bug18）：封面主色浅渐变，圆角卡片化 */
+.al-head.tinted {
+  background-size: cover;
+  box-shadow: var(--shadow-sm);
 }
 .al-cover {
   width: 150px;

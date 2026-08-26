@@ -189,7 +189,7 @@ function pulseLoop() {
 watch(() => player.playing, (on) => {
   if (on && !prefersReduced) analyser = getAnalyser(getAudioEl())
   if (!rafId && !prefersReduced) rafId = requestAnimationFrame(pulseLoop)
-})
+}, { immediate: true }) // bug13：切页回来时 playing 已是 true 不再触发 watch，immediate 补挂分析器
 const pct = computed(() => {
   const d = player.duration || 0
   return d > 0 ? Math.min(100, (player.currentTime / d) * 100) : 0

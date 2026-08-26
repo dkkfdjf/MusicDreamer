@@ -10,7 +10,7 @@
 
     <nav class="sidebar-nav" ref="navEl">
       <router-link v-for="n in libNavs" :key="n.to" :to="n.to" class="nav-item"
-        :class="{ active: isActive(n.to) }">
+        :class="{ active: isActive(n.to) }" :title="n.desc">
         <span class="nav-icon" v-html="n.icon"></span>
         <span class="nav-text">{{ n.text }}</span>
       </router-link>
@@ -19,7 +19,8 @@
         <!-- 主区域：点击直达"我的歌单"页；右侧小箭头才展开下拉快选 -->
         <div class="playlist-row">
           <router-link to="/library" class="nav-item playlist-trigger"
-            :class="{ active: isLibraryArea && route.path === '/library' }">
+            :class="{ active: isLibraryArea && route.path === '/library' }"
+            title="我收藏的歌、创建/收藏的歌单与专辑">
             <span class="nav-icon">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 7h18M3 12h18M3 17h12" />
@@ -54,7 +55,7 @@
       <template v-if="user.isLogin">
         <div class="nav-section-title">工具</div>
         <router-link v-if="user.isSinger" to="/upload" class="nav-item"
-          :class="{ active: isActive('/upload') }">
+          :class="{ active: isActive('/upload') }" title="上传作品：本地文件或 B 站 / YouTube 链接导入，提交后进入审核">
           <span class="nav-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -64,7 +65,8 @@
           </span>
           <span class="nav-text">上传中心</span>
         </router-link>
-        <div v-else-if="user.role === 0" class="nav-item" @click="openApply">
+        <div v-else-if="user.role === 0" class="nav-item" @click="openApply"
+          title="提交申请成为认证歌手，解锁作品上传">
           <span class="nav-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -75,7 +77,8 @@
           </span>
           <span class="nav-text">歌手认证</span>
         </div>
-        <div v-if="user.isLogin" class="nav-item" @click="openSongRequest">
+        <div v-if="user.isLogin" class="nav-item" @click="openSongRequest"
+          title="没有找到想听的歌？录一段旋律，靠哼唱识别帮你找到它">
           <span class="nav-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 18V5l12-2v13" />
@@ -86,7 +89,7 @@
           <span class="nav-text">求歌</span>
         </div>
         <router-link v-if="user.isAdmin" to="/admin" class="nav-item"
-          :class="{ active: isActive('/admin') }">
+          :class="{ active: isActive('/admin') }" title="审核歌曲/歌手、用户管理、举报处理与系统工具">
           <span class="nav-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3" />
@@ -95,7 +98,8 @@
           </span>
           <span class="nav-text">管理后台</span>
         </router-link>
-        <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
+        <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }"
+          title="修改昵称、密码与账号资料">
           <span class="nav-icon">⚙️</span>
           <span class="nav-text">个人设置</span>
         </router-link>
@@ -161,16 +165,19 @@ const libNavs = [
   {
     to: '/',
     text: '首页',
+    desc: '每日精选、热门榜单与曲风分类，发现好歌',
     icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>'
   },
   {
     to: '/songs',
     text: '全部歌曲',
+    desc: '全站曲库广场，按曲风浏览、搜索与收藏',
     icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
   },
   {
     to: '/recent',
     text: '最近播放',
+    desc: '你听过的歌按时间倒序排列，随时接着听',
     icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>'
   }
 ]

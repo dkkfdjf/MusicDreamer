@@ -92,8 +92,10 @@ export const api = {
   activate: (token) => get('/user/activate', { token }),
   login: (data) => post('/user/login', data),
   logout: () => post('/user/logout', null, { noRedirect: true }),
-  sendResetCode: (email) => post('/user/password/send-code', { email }),
+  // 忘记密码：用户名+注册邮箱匹配即可重置（无需验证码，bug1）
   resetPassword: (data) => post('/user/password/reset', data),
+  // 已登录改密：旧密码核验 + 新密码
+  changePassword: (data) => post('/user/password/change', data),
   getUserInfo: () => get('/user/info'),
   updateUserInfo: (data) => put('/user/info', data),
 

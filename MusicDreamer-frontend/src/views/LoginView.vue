@@ -42,17 +42,18 @@
           </summary>
           <div style="margin-top: 10px">
             <div class="input-group">
+              <label>用户名</label>
+              <input v-model="reset.username" type="text" placeholder="账号用户名" />
+            </div>
+            <div class="input-group">
               <label>注册邮箱</label>
               <input v-model="reset.email" type="text" placeholder="you@example.com" />
             </div>
-            <button class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px" @click="sendCode">
-              发送验证码
-            </button>
-            <div style="display: flex; gap: 8px; margin-top: 10px">
-              <input v-model="reset.code" type="text" placeholder="验证码" style="flex: 0 0 90px" />
-              <input v-model="reset.newPassword" type="password" placeholder="新密码" style="flex: 1" />
+            <div style="display: flex; gap: 8px; margin-top: 4px">
+              <input v-model="reset.newPassword" type="password" placeholder="新密码（6-64 位）" style="flex: 1" @keyup.enter="doReset" />
               <button class="btn btn-primary" style="padding: 5px 12px; font-size: 12px" @click="doReset">重置</button>
             </div>
+            <div style="font-size: 11px; color: var(--text-faint); margin-top: 6px">用户名与注册邮箱匹配即可直接重置</div>
           </div>
         </details>
       </div>
@@ -72,7 +73,7 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const form = reactive({ username: '', password: '', remember: false })
-const reset = reactive({ email: '', code: '', newPassword: '' })
+const reset = reactive({ username: '', email: '', newPassword: '' })
 const loading = ref(false)
 const waveEl = ref(null)
 let waveTl = null
@@ -107,13 +108,11 @@ async function doLogin() {
   }
 }
 
-async function sendCode() {
-  if (!reset.email) return message.warning('请输入注册邮箱')
-  await api.sendResetCode(reset.email)
-  message.success('验证码已发送（未配置邮箱时见后端日志）')
-}
-
 async function doReset() {
+  if (!reset.username || !reset.email || !reset.newPassword) {
+    return message.warning('请填写用户名、注册邮箱和新密码')
+  }
+  if (reset.newPassword.length < 6) return message.warning('新密码至少 6 位')
   await api.resetPassword(reset)
   message.success('密码已重置，请使用新密码登录')
 }

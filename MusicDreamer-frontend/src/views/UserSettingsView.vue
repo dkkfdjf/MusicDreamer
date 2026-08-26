@@ -37,13 +37,36 @@
 
     <div class="settings-card">
       <h2>账户操作</h2>
-      <button class="btn btn-secondary" @click="$router.push('/change-password')">
+      <button class="btn btn-secondary" @click="pwdVisible = true">
         修改密码
       </button>
       <button class="btn btn-text" style="margin-left: 10px" @click="logout">
         退出登录
       </button>
     </div>
+
+    <!-- 修改密码弹窗：旧密码核验 + 新密码二次确认（bug1，替代不存在的 /change-password 路由） -->
+    <el-dialog v-model="pwdVisible" title="修改密码" width="420px" append-to-body>
+      <div class="form-group">
+        <label for="old-password">当前密码</label>
+        <input id="old-password" v-model="pwdForm.oldPassword" type="password" placeholder="输入当前密码" />
+      </div>
+      <div class="form-group">
+        <label for="new-password">新密码</label>
+        <input id="new-password" v-model="pwdForm.newPassword" type="password" placeholder="6-64 位" />
+      </div>
+      <div class="form-group">
+        <label for="confirm-password">确认新密码</label>
+        <input id="confirm-password" v-model="pwdForm.confirm" type="password" placeholder="再次输入新密码"
+          @keyup.enter="changePassword" />
+      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="pwdVisible = false">取消</button>
+        <button class="btn btn-primary" style="margin-left: 10px" :disabled="pwdSaving" @click="changePassword">
+          {{ pwdSaving ? '提交中...' : '确认修改' }}
+        </button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -62,6 +85,10 @@ const nicknameForm = reactive({
 })
 
 const saving = ref(false)
+
+const pwdVisible = ref(false)
+const pwdSaving = ref(false)
+const pwdForm = reactive({ oldPassword: '', newPassword: '', confirm: '' })
 
 const canSaveNickname = computed(() => {
   return userStore.isLogin &&
@@ -94,6 +121,23 @@ async function saveNickname() {
     message.error('昵称更新失败：' + (error.message || '未知错误'))
   } finally {
     saving.value = false
+  }
+}
+
+async function changePassword() {
+  if (!pwdForm.oldPassword) return message.warning('请输入当前密码')
+  if (pwdForm.newPassword.length < 6 || pwdForm.newPassword.length > 64) {
+    return message.warning('新密码需 6-64 位')
+  }
+  if (pwdForm.newPassword !== pwdForm.confirm) return message.warning('两次输入的新密码不一致')
+  pwdSaving.value = true
+  try {
+    await api.changePassword({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword })
+    message.success('密码修改成功，下次登录请使用新密码')
+    pwdVisible.value = false
+    Object.assign(pwdForm, { oldPassword: '', newPassword: '', confirm: '' })
+  } finally {
+    pwdSaving.value = false
   }
 }
 
