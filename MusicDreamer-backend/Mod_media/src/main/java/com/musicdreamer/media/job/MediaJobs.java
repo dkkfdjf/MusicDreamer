@@ -130,8 +130,13 @@ public class MediaJobs {
             // 2) 在线无命中 → 本地 AI 转写
             tasks.progress(task.getId(), 25, "在线无歌词，本地 AI 识别中…");
             transcribe(task);
+        } catch (IllegalStateException e) {
+            // 歌曲不存在或 Feign 调用失败
+            tasks.finish(task.getId(), "FAILED", "歌曲信息获取失败：" + e.getMessage());
+            log.error("lyricsFetch failed for songId={}: {}", task.getSongId(), e.getMessage(), e);
         } catch (Exception e) {
             tasks.finish(task.getId(), "FAILED", "获取歌词异常：" + e.getMessage());
+            log.error("lyricsFetch exception for songId={}: {}", task.getSongId(), e.getMessage(), e);
         }
     }
 
