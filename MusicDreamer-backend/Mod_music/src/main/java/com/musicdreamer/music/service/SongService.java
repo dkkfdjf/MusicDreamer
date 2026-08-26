@@ -193,12 +193,11 @@ public class SongService {
                 .set(Song::getRejectReason, null));
     }
 
-    /** 我上传的歌（管理员看全部；联 user 带歌手昵称）。 */
+    /** 我上传的歌（只看本人，管理员想看全量走 adminList；联 user 带歌手昵称）。 */
     public Map<String, Object> mine(int page, int size, Integer status) {
         AuthContext.requireLogin();
-        boolean admin = AuthContext.getRole() == AuthContext.ROLE_ADMIN;
         Page<SongManageVO> pager = new Page<>(page, size);
-        songMapper.selectManagePage(pager, admin ? null : AuthContext.getUserId(), status, null);
+        songMapper.selectManagePage(pager, AuthContext.getUserId(), status, null);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", pager.getTotal());
         result.put("songs", pager.getRecords());
@@ -384,6 +383,9 @@ public class SongService {
         if (StringUtils.hasText(dto.getSingerName())) {
             song.setSingerName(dto.getSingerName().trim());
         }
+        if (StringUtils.hasText(dto.getStyle())) {
+            song.setStyle(dto.getStyle().trim());
+        }
         song.setPlayCount(0L);
         song.setCollectCount(0);
         // 与手动上传(submit)一致：操作者是管理员时直接发布，免去人工审核
@@ -430,6 +432,15 @@ public class SongService {
         songMapper.update(null, new LambdaUpdateWrapper<Song>()
                 .eq(Song::getId, songId)
                 .set(Song::getLyricUrl, lyricUrl));
+    }
+
+    /** 在线词库命中信息回写（Feign，歌词任务用；复盘时间戳对照）。 */
+    public void internalLyricSource(Long songId, Long sourceId, String sourceUrl) {
+        mustGet(songId);
+        songMapper.update(null, new LambdaUpdateWrapper<Song>()
+                .eq(Song::getId, songId)
+                .set(Song::getLyricSourceId, sourceId)
+                .set(Song::getLyricSourceUrl, sourceUrl));
     }
 
     /** ---------- 私有 ---------- */

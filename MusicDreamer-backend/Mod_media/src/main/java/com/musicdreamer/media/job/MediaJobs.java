@@ -1,5 +1,6 @@
 package com.musicdreamer.media.job;
 
+import com.github.houbb.opencc4j.util.ZhConverterUtil;
 import com.musicdreamer.common.api.Mess;
 import com.musicdreamer.media.client.MusicClient;
 import com.musicdreamer.media.entity.MediaTask;
@@ -79,6 +80,10 @@ public class MediaJobs {
         }
 
         try {
+            if (m != null) {
+                // 词库记录 id 写进文件头并回写 song 表（bug8：复盘时间戳对照）
+                writeBackLyricSource(song, m);
+            }
             if (m != null && m.syncedLyrics() != null) {
                 tasks.progress(task.getId(), 25, "已命中在线歌词，正在本地校准时间轴…");
                 List<LrcSupport.LrcLine> lrc = LrcSupport.parseLrc(m.syncedLyrics());
@@ -94,7 +99,7 @@ public class MediaJobs {
                     content = m.syncedLyrics();
                     note = wav == null ? "本地校准不可用，保留在线时间轴" : "本地校准未完成，保留在线时间轴";
                 }
-                saveLyric(song, "[source:lrclib]\n" + content);
+                saveLyric(song, lrclibHeader(m) + content);
                 tasks.finish(task.getId(), "SUCCESS", note + "（" + m.trackName() + "）");
                 return;
             }
@@ -109,25 +114,31 @@ public class MediaJobs {
                     if (merged.matched() >= need) {
                         String splitNote = merged.lines().size() > plain.size()
                                 ? String.format("，已按演唱拆分为 %d 行", merged.lines().size()) : "";
-                        saveLyric(song, "[source:lrclib]\n" + LyricAligner.writeMergedLyrics(merged.lines()));
+                        saveLyric(song, lrclibHeader(m) + LyricAligner.writeMergedLyrics(merged.lines()));
                         tasks.finish(task.getId(), "SUCCESS",
                                 String.format("已用本地识别添加时间轴（%d/%d 句对齐%s）（%s）",
                                         merged.matched(), plain.size(), splitNote, m.trackName()));
                         return;
                     }
                     // 对不上：宁可保留纯文本，不写错误时间轴
-                    saveLyric(song, "[source:lrclib]\n" + m.plainLyrics());
+                    saveLyric(song, lrclibHeader(m) + m.plainLyrics());
                     tasks.finish(task.getId(), "SUCCESS",
                             String.format("在线歌词与本地识别对不上（%d/%d 句），保留纯文本（%s）",
                                     merged.matched(), plain.size(), m.trackName()));
                     return;
                 }
-                saveLyric(song, "[source:lrclib]\n" + m.plainLyrics());
+                saveLyric(song, lrclibHeader(m) + m.plainLyrics());
                 tasks.finish(task.getId(), "SUCCESS", "已保存在线纯文本歌词（本地识别不可用，无时间轴）（" + m.trackName() + "）");
                 return;
             }
 
-            // 2) 在线无命中 → 本地 AI 转写
+            // 1.5) 词库无命中 → 先试来源视频的 CC 字幕（合并后的歌词链路：词库 → 字幕 → 转写）
+            String sourceUrl = task.getSourceUrl();
+            if (sourceUrl != null && !sourceUrl.isBlank() && trySubtitleAsLyrics(task, song, sourceUrl)) {
+                return;
+            }
+
+            // 2) 字幕也没有 → 本地 AI 转写
             tasks.progress(task.getId(), 25, "在线无歌词，本地 AI 识别中…");
             transcribe(task);
         } catch (IllegalStateException e) {
@@ -225,14 +236,28 @@ public class MediaJobs {
 
     private void saveLyric(Map<String, Object> song, String content) throws Exception {
         Path finalLrc = resolveLyricFile(song);
-        Files.writeString(finalLrc, content == null ? "" : content);
+        Files.writeString(finalLrc, content == null ? "" : toSimple(content));
         writeBackLyric(song, finalLrc);
     }
 
-    /** 歌词文件保存（转写产物移动入正式目录）并回写 song.lyric_url。 */
+    /** 歌词繁→简（bug19）：LRCLIB/whisper/平台字幕都可能出繁体，落盘前统一转简体。
+     *  时间戳与 [source:] 等标签是 ASCII，转换天然无感；转换异常原样返回不阻断。 */
+    static String toSimple(String lrc) {
+        if (lrc == null || lrc.isEmpty()) {
+            return lrc;
+        }
+        try {
+            return ZhConverterUtil.toSimple(lrc);
+        } catch (Exception e) {
+            return lrc;
+        }
+    }
+
+    /** 歌词文件保存（转写产物落正式目录，繁→简后写入）并回写 song.lyric_url。 */
     private void saveLyricFrom(Map<String, Object> song, Path sourceLrc) throws Exception {
         Path finalLrc = resolveLyricFile(song);
-        Files.move(sourceLrc, finalLrc, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.writeString(finalLrc, toSimple(Files.readString(sourceLrc)));
+        Files.deleteIfExists(sourceLrc);
         writeBackLyric(song, finalLrc);
     }
 
@@ -256,6 +281,64 @@ public class MediaJobs {
             }
         }
         log.error("updateLyric 三次均失败，songId={} lyricUrl={}（文件已落盘，可重取歌词修复指针）", songId, url);
+    }
+
+    /** LRCLIB 文件头：来源标记 + 词库记录 id（无 id 时只有来源行）。 */
+    private static String lrclibHeader(LrcSupport.OnlineMatch m) {
+        String h = "[source:lrclib]\n";
+        return m.id() == null ? h : h + "[lrclib:" + m.id() + "]\n";
+    }
+
+    /** 词库命中信息回写 song.lyric_source_id/url（bug8，失败不阻断歌词主流程）。 */
+    private void writeBackLyricSource(Map<String, Object> song, LrcSupport.OnlineMatch m) {
+        if (m == null || m.id() == null) {
+            return;
+        }
+        try {
+            music.updateLyricSource(Map.of(
+                    "songId", ((Number) song.get("id")).longValue(),
+                    "sourceId", m.id(),
+                    "sourceUrl", "https://lrclib.net/api/get/" + m.id()));
+        } catch (Exception e) {
+            log.warn("updateLyricSource 失败（不影响歌词落盘）: {}", e.getMessage());
+        }
+    }
+
+    /** 词库无命中时尝试来源视频 CC 字幕当歌词（bug7 合并链路：词库 → 字幕 → 转写）。
+     *  拿到字幕并落盘返回 true；无字幕/任何失败返回 false 交给下一级。 */
+    private boolean trySubtitleAsLyrics(MediaTask task, Map<String, Object> song, String url) {
+        String ytdlp = tools.locate(ToolsLocator.YT_DLP);
+        if (ytdlp == null) {
+            return false;
+        }
+        try {
+            tasks.progress(task.getId(), 20, "在线无歌词，正在尝试视频字幕…");
+            Path taskDir = storage.dir("task");
+            String out = taskDir.resolve(task.getId() + "_sub").toString();
+            List<String> cmd = new ArrayList<>(List.of(ytdlp, "--write-subs", "--skip-download",
+                    "--sub-lang", "zh-Hans,zh,en", "-o", out));
+            cmd.addAll(netArgs.build(url));
+            cmd.add(url);
+            ExecResult r = executor.run(cmd, 5 * 60_000L, null, TaskManager.cancelKey(task.getId())).join();
+            if (r.getExitCode() != 0) {
+                return false;
+            }
+            Path srt = findSubtitle(taskDir, task.getId());
+            if (srt == null) {
+                return false;
+            }
+            String lrcText = SrtToLrc.convert(srt);
+            Files.deleteIfExists(srt);
+            if (lrcText == null || lrcText.isBlank()) {
+                return false;
+            }
+            saveLyric(song, "[source:subtitle]\n" + lrcText);
+            tasks.finish(task.getId(), "SUCCESS", "词库无命中，已用视频字幕作歌词");
+            return true;
+        } catch (Exception e) {
+            log.warn("subtitle-as-lyrics degraded: {}", e.getMessage());
+            return false;
+        }
     }
 
     /** 响度分析：ffmpeg ebur128 结果在 stderr（约束三），增益=目标-实测，回写 song 表。 */

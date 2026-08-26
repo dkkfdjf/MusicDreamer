@@ -29,4 +29,7 @@ public class InternalCreateDTO {
 
     /** 原始歌手名（下载任务带入，展示优先于账号昵称）。 */
     private String singerName;
+
+    /** 音乐风格（bug12：上传中心必选，随任务透传）。 */
+    private String style;
 }

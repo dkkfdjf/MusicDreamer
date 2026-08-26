@@ -26,10 +26,12 @@ public interface SongMapper extends BaseMapper<Song> {
             + "FROM song s LEFT JOIN user u ON u.id = s.singer_id WHERE s.id = #{id}")
     SongPlayVO selectPlayById(@Param("id") Long id);
 
-    /** 详情视图（含热计数与状态）。 */
+    /** 详情视图（含热计数与状态；singerName 为自定义歌手展示名，编辑回填用；
+     *  lyricSourceId/Url 为在线词库来源记录，bug8 管理端复盘）。 */
     @Select("SELECT s.id AS songId, s.name, COALESCE(NULLIF(s.singer_name, ''), u.nickname, u.username) AS singer, "
-            + "s.singer_id AS singerId, s.album, s.style, s.language, s.duration, "
+            + "s.singer_name AS singerName, s.singer_id AS singerId, s.album, s.style, s.language, s.duration, "
             + "s.file_url AS fileUrl, s.cover_url AS coverUrl, s.lyric_url AS lyricUrl, s.file_format AS fileFormat, "
+            + "s.lyric_source_id AS lyricSourceId, s.lyric_source_url AS lyricSourceUrl, "
             + "s.play_count AS playCount, s.collect_count AS collectCount, s.volume_gain AS volumeGain, "
             + "s.status, s.create_time AS createTime "
             + "FROM song s LEFT JOIN user u ON u.id = s.singer_id WHERE s.id = #{id}")
@@ -107,7 +109,8 @@ public interface SongMapper extends BaseMapper<Song> {
             + "s.singer_id AS singerId, s.album, s.style, s.language, s.duration, s.status, "
             + "s.source_url AS sourceUrl, s.reject_reason AS rejectReason, s.cover_url AS coverUrl, "
             + "s.file_url AS fileUrl, s.lyric_url AS lyricUrl, s.file_format AS fileFormat, "
-            + "s.singer_name AS singerName, s.play_count AS playCount, s.collect_count AS collectCount, s.create_time AS createTime "
+            + "s.singer_name AS singerName, s.lyric_source_id AS lyricSourceId, s.lyric_source_url AS lyricSourceUrl, "
+            + "s.play_count AS playCount, s.collect_count AS collectCount, s.create_time AS createTime "
             + "FROM song s LEFT JOIN user u ON u.id = s.singer_id "
             + "<where>"
             + "<if test='singerId != null'> s.singer_id = #{singerId}</if>"

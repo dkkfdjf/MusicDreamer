@@ -87,6 +87,14 @@ public class InternalController {
         return Mess.ok();
     }
 
+    /** 在线词库命中信息回写（Feign，LRCLIB 命中后记录 id/链接，复盘时间戳用）。 */
+    @PostMapping("/lyric-source")
+    public Mess lyricSource(@RequestBody Map<String, Object> body) {
+        songService.internalLyricSource(asLong(body.get("songId")),
+                asLong(body.get("sourceId")), (String) body.get("sourceUrl"));
+        return Mess.ok();
+    }
+
     private static Long asLong(Object v) {
         if (v == null) return null;
         if (v instanceof Number) return ((Number) v).longValue();

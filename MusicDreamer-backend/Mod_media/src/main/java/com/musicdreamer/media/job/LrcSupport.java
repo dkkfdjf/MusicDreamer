@@ -27,9 +27,9 @@ public final class LrcSupport {
     public record LrcLine(double time, String text) {
     }
 
-    /** LRCLIB 命中结果；synced 与 plain 二选一。 */
+    /** LRCLIB 命中结果；synced 与 plain 二选一；id 为词库记录 id（复盘时间戳用，可空）。 */
     public record OnlineMatch(String syncedLyrics, String plainLyrics,
-                              String trackName, String artistName, boolean noTimeline) {
+                              String trackName, String artistName, boolean noTimeline, Long id) {
     }
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -228,7 +228,7 @@ public final class LrcSupport {
                 Map<String, Object> r = httpGetJson(url);
                 if (r != null && str(r.get("syncedLyrics")) != null) {
                     return new OnlineMatch(str(r.get("syncedLyrics")), null,
-                            str(r.get("trackName")), str(r.get("artistName")), false);
+                            str(r.get("trackName")), str(r.get("artistName")), false, lng(r.get("id")));
                 }
             } catch (Exception ignored) {
             }
@@ -251,7 +251,7 @@ public final class LrcSupport {
                 inGate.sort(Comparator.comparingDouble(r -> score(r, artist, duration)));
                 Map<String, Object> best = inGate.get(0);
                 return new OnlineMatch(str(best.get("syncedLyrics")), null,
-                        str(best.get("trackName")), str(best.get("artistName")), false);
+                        str(best.get("trackName")), str(best.get("artistName")), false, lng(best.get("id")));
             }
 
             // 2b) 纯文本兜底：本地是 DJ 版/视频版时库里常只有原版同步或变体纯文本
@@ -263,7 +263,7 @@ public final class LrcSupport {
                 plains.sort(Comparator.comparingDouble(r -> score(r, artist, duration)));
                 Map<String, Object> best = plains.get(0);
                 return new OnlineMatch(null, str(best.get("plainLyrics")),
-                        str(best.get("trackName")), str(best.get("artistName")), true);
+                        str(best.get("trackName")), str(best.get("artistName")), true, lng(best.get("id")));
             }
         } catch (Exception ignored) {
         }
@@ -291,6 +291,15 @@ public final class LrcSupport {
         if (o == null) return null;
         String s = String.valueOf(o).trim();
         return s.isEmpty() ? null : s;
+    }
+
+    private static Long lng(Object o) {
+        if (o instanceof Number n) return n.longValue();
+        if (o != null) try {
+            return Long.parseLong(String.valueOf(o));
+        } catch (NumberFormatException ignored) {
+        }
+        return null;
     }
 
     private static Double dbl(Object o) {

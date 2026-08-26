@@ -79,11 +79,13 @@ public class DownloadJob implements TaskManager.TaskRunner {
     @Override
     public void run(MediaTask task) {
         String url = task.getSourceUrl();
-        // 控制器把导入开关写进 URL 标记（wantSubtitle=1 / mdlyric=1）。入库查重与
-        // 歌曲展示要干净链接，先剥掉标记再往下传
+        // 控制器把导入选项写进 URL 标记（mdlyric=1 / style=xx；wantSubtitle=1 为旧标记，
+        // 仅兼容部署前已在队列的任务）。入库查重与歌曲展示要干净链接，先剥掉标记再往下传
         boolean wantSubtitle = url.contains("wantSubtitle=1") || url.contains("#sub");
         boolean wantLyrics = url.contains("mdlyric=1");
-        String cleanUrl = url.replaceAll("[?&](wantSubtitle=1|mdlyric=1|reqid=\\d+)", "");
+        String style = extractStyle(url);
+        String customTitle = extractMarker(url, "mtitle"); // bug16：用户自定义歌名
+        String cleanUrl = url.replaceAll("[?&](wantSubtitle=1|mdlyric=1|reqid=\\d+|style=[^&#]*|mtitle=[^&#]*)", "");
         Path taskDir = storage.dir("task");
         String ytdlp = tools.locate(ToolsLocator.YT_DLP);
         String ffmpeg = tools.locate(ToolsLocator.FFMPEG);
@@ -99,7 +101,9 @@ public class DownloadJob implements TaskManager.TaskRunner {
                 tasks.finish(task.getId(), "FAILED", translate("元数据获取失败"));
                 return;
             }
-            String title = textOr(meta, "title", "导入歌曲");
+            String title = (customTitle != null && !customTitle.isBlank())
+                    ? customTitle // 用户指定歌名（bug16）：跳过智能裁剪
+                    : smartTitle(textOr(meta, "title", "导入歌曲"));
             long duration = meta.path("duration").asLong(0);
             // ② 下载（进度 0-60）
             tasks.progress(task.getId(), 5, "正在下载音频…");
@@ -152,6 +156,9 @@ public class DownloadJob implements TaskManager.TaskRunner {
             song.put("name", title);
             song.put("singerId", task.getOperator());
             song.put("duration", duration);
+            if (style != null && !style.isBlank()) {
+                song.put("style", style);
+            }
             song.put("fileUrl", storage.fileUrl("task", task.getId() + "_out.mp3"));
             // 临时目录会在任务结束时清理，不能把临时封面地址作为歌曲最终数据。
             song.put("coverUrl", null);
@@ -210,16 +217,16 @@ public class DownloadJob implements TaskManager.TaskRunner {
             fingerprints.ingestQuiet(songId, finalMp3);
             tasks.progress(task.getId(), 85, "入库完成（待审核），执行后置任务…");
 
-            // ⑥ 后置：响度必做；字幕 / 自动获取歌词按导入开关（控制器写入的 URL 标记，
-            //    LYRICS_FETCH 在线歌词库优先、无命中本地 AI 转写）
+            // ⑥ 后置：响度必做；歌词按导入开关（bug7 合并后只有"自动获取歌词"一条链：
+            //    LRCLIB 词库 → 视频 CC 字幕 → 本地 AI 转写，cleanUrl 随任务传递供字幕级用）。
+            //    wantSubtitle 单独分支仅兼容部署前已在队列的旧任务。
             tasks.submit(TaskManager.LOUDNESS, null, songId, task.getOperator(), "响度分析排队");
-            if (wantSubtitle) {
+            if (wantLyrics) {
+                tasks.submit(TaskManager.LYRICS_FETCH, cleanUrl, songId,
+                        task.getOperator(), "自动获取歌词排队");
+            } else if (wantSubtitle) {
                 tasks.submit(TaskManager.SUBTITLE, cleanUrl, songId,
                         task.getOperator(), "字幕下载排队");
-            }
-            if (wantLyrics) {
-                tasks.submit(TaskManager.LYRICS_FETCH, null, songId,
-                        task.getOperator(), "自动获取歌词排队");
             }
             tasks.finish(task.getId(), "SUCCESS", null);
         } catch (Exception e) {
@@ -244,6 +251,52 @@ public class DownloadJob implements TaskManager.TaskRunner {
             }
         }
         return null;
+    }
+
+    /** 从 URL 标记里取风格（控制器写入 style=xx，URL 编码）。 */
+    private static String extractStyle(String url) {
+        return extractMarker(url, "style");
+    }
+
+    /** 从 URL 标记里取任意参数值（URL 编码写入，容错解码）。 */
+    private static String extractMarker(String url, String name) {
+        Matcher m = Pattern.compile("[?&]" + name + "=([^&#]+)").matcher(url);
+        if (!m.find()) {
+            return null;
+        }
+        try {
+            return java.net.URLDecoder.decode(m.group(1), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return m.group(1);
+        }
+    }
+
+    /** 歌名智能裁剪（bug9）：B 站视频标题常带"【4K修复】xxx 无损音质"等修饰，
+     *  直接入库会又长又难看。规则：取《》里的歌名；否则去掉【】修饰与站点后缀；
+     *  空白收敛；40 字封顶；裁空回落原标题。 */
+    static String smartTitle(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        String t = raw.trim();
+        // 1) 书名号优先：标题里明确标了歌名
+        Matcher bk = Pattern.compile("《([^《》]{1,40})》").matcher(t);
+        if (bk.find()) {
+            return bk.group(1).trim();
+        }
+        // 2) 去各类括号修饰段（【4K】(Live)[MV]「完整」等）
+        t = t.replaceAll("[【\\[（(「『]([^【\\]）)」』]*)[】\\]）)」』]", " ");
+        // 3) 去站点后缀
+        t = t.replaceAll("(?i)[_\\s|-]*bilibili.*$", "")
+                .replaceAll("[｜|]\\s*哔哩哔哩.*$", "")
+                .replaceAll("[_\\s|-]*哔哩哔哩.*$", "");
+        // 4) 空白收敛、去首尾连接符
+        t = t.replaceAll("\\s+", " ").trim()
+                .replaceAll("^[\\s\\-－—_·.]+|[\\s\\-－—_·.]+$", "");
+        if (t.isEmpty()) {
+            return raw.trim();
+        }
+        return t.length() > 40 ? t.substring(0, 40) : t;
     }
 
     /** 错误转译表（设计 10.5，原始 stderr 绝不给用户）。 */

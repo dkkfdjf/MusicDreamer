@@ -4,7 +4,6 @@ import com.musicdreamer.login.dto.ChangePasswordDTO;
 import com.musicdreamer.login.dto.LoginDTO;
 import com.musicdreamer.login.dto.RegisterDTO;
 import com.musicdreamer.login.dto.ResetPasswordDTO;
-import com.musicdreamer.login.dto.SendCodeDTO;
 import com.musicdreamer.login.vo.LoginVO;
 
 import javax.servlet.http.HttpServletRequest;
@@ -24,10 +23,7 @@ public interface AuthService {
     /** 登出：删除 Redis 会话记录。 */
     void logout();
 
-    /** 发送找回密码验证码（Redis 10 分钟）。 */
-    void sendResetCode(SendCodeDTO dto);
-
-    /** 凭验证码重置密码。 */
+    /** 找回密码：用户名 + 注册邮箱 双匹配重置。 */
     void resetPassword(ResetPasswordDTO dto);
 
     /** 登录态修改密码。 */

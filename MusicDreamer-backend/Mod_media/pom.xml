@@ -68,6 +68,12 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-websocket</artifactId>
     </dependency>
+    <!-- 歌词繁简转换（bug19）：LRCLIB/whisper/平台字幕常出繁体 -->
+    <dependency>
+      <groupId>com.github.houbb</groupId>
+      <artifactId>opencc4j</artifactId>
+      <version>1.8.0</version>
+    </dependency>
   </dependencies>
 
   <build>

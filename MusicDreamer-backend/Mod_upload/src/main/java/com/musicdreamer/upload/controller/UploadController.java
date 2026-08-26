@@ -60,7 +60,16 @@ public class UploadController {
     public Mess lyric(@RequestParam("file") MultipartFile file) throws IOException {
         AuthContext.requireUploader();
         check(file, LYRIC_EXT, 1024 * 1024);
-        String url = storage.save("lyric", file.getOriginalFilename(), file.getInputStream());
+        // 繁→简统一（bug19）：与在线词库/转写产出的歌词同一规范
+        String content = new String(file.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        String converted;
+        try {
+            converted = com.github.houbb.opencc4j.util.ZhConverterUtil.toSimple(content);
+        } catch (Exception e) {
+            converted = content;
+        }
+        String url = storage.save("lyric", file.getOriginalFilename(),
+                new java.io.ByteArrayInputStream(converted.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         return Mess.ok(Map.of("url", url));
     }
 

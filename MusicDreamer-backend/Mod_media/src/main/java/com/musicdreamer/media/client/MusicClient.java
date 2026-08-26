@@ -29,6 +29,10 @@ public interface MusicClient {
     @PostMapping("/lyric")
     Mess updateLyric(@RequestBody Map<String, Object> body);
 
+    /** 在线词库命中信息回写（LRCLIB id/链接，复盘时间戳用）。 */
+    @PostMapping("/lyric-source")
+    Mess updateLyricSource(@RequestBody Map<String, Object> body);
+
     /** 音频/封面正式地址回写（下载落位 music/{id}.mp3 后）。 */
     @PostMapping("/file")
     Mess updateFile(@RequestBody Map<String, Object> body);
@@ -39,6 +43,7 @@ public interface MusicClient {
         @Override public Mess create(Map<String, Object> song) { return null; }
         @Override public Mess updateLoudness(Map<String, Object> body) { return null; }
         @Override public Mess updateLyric(Map<String, Object> body) { return null; }
+        @Override public Mess updateLyricSource(Map<String, Object> body) { return null; }
         @Override public Mess updateFile(Map<String, Object> body) { return null; }
     }
 }

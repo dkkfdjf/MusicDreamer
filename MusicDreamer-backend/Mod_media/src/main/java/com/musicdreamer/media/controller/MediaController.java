@@ -42,8 +42,14 @@ public class MediaController {
     @Data
     public static class DownloadDTO {
         private String url;
+        /** 旧字段（曾控制单独的字幕后置任务）：歌词链路已合并为"自动获取歌词"
+         *  （词库→字幕→转写），该字段仅保留兼容旧前端，不再编码进任务。 */
         private Boolean wantSubtitle = true;
         private Boolean wantTranscribe = false;
+        /** 音乐风格（bug12 上传必选，随 URL 标记透传给下载任务）。 */
+        private String style;
+        /** 自定义歌名（bug16）：非空时优先于视频标题智能裁剪。 */
+        private String title;
     }
 
     @PostMapping("/download")
@@ -56,14 +62,19 @@ public class MediaController {
         if (!SUPPORTED.matcher(url).find()) {
             throw new BizException(ErrorCode.FILE_TYPE_UNSUPPORTED.getCode(), "不支持的链接");
         }
-        // MediaTask 表没有开关列，按 DownloadJob 既有约定把选项写进 source_url 标记，
-        // 下载完成后据此触发字幕 / 自动获取歌词后置任务。mdlyric 避开 B 站真实的
-        // ?t= 时间戳参数，防止无开关时被误判
-        if (Boolean.TRUE.equals(dto.getWantSubtitle())) {
-            url += (url.contains("?") ? "&" : "?") + "wantSubtitle=1";
-        }
+        // MediaTask 表没有开关列，按 DownloadJob 既有约定把选项写进 source_url 标记。
+        // mdlyric 避开 B 站真实的 ?t= 时间戳参数，防止无开关时被误判；
+        // style 为必选风格（bug12），URL 编码后随标记透传
         if (Boolean.TRUE.equals(dto.getWantTranscribe())) {
             url += (url.contains("?") ? "&" : "?") + "mdlyric=1";
+        }
+        if (dto.getStyle() != null && !dto.getStyle().isBlank()) {
+            url += (url.contains("?") ? "&" : "?") + "style="
+                    + java.net.URLEncoder.encode(dto.getStyle().trim(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        if (dto.getTitle() != null && !dto.getTitle().isBlank()) {
+            url += (url.contains("?") ? "&" : "?") + "mtitle="
+                    + java.net.URLEncoder.encode(dto.getTitle().trim(), java.nio.charset.StandardCharsets.UTF_8);
         }
         MediaTask t = tasks.submit(TaskManager.DOWNLOAD, url, null,
                 AuthContext.getUserId(), "排队中…");

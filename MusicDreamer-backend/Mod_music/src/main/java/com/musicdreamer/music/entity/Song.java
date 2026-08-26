@@ -38,6 +38,12 @@ public class Song {
 
     private String lyricUrl;
 
+    /** 在线词库记录 id（LRCLIB；本地来源为空）。 */
+    private Long lyricSourceId;
+
+    /** 在线词库原始记录链接。 */
+    private String lyricSourceUrl;
+
     private String fileFormat;
 
     private Long playCount;

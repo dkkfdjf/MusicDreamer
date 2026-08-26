@@ -13,6 +13,8 @@ public class SongSubmitDTO {
 
     private String album;
 
+    /** 风格必选（bug12）。 */
+    @NotBlank(message = "风格不能为空")
     private String style;
 
     private String language;

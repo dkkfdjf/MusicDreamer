@@ -36,6 +36,12 @@ public class SongManageVO {
 
     private String lyricUrl;
 
+    /** 在线词库记录 id（LRCLIB，复盘时间戳用；本地来源为空）。 */
+    private Long lyricSourceId;
+
+    /** 在线词库原始记录链接（https://lrclib.net/api/get/{id}）。 */
+    private String lyricSourceUrl;
+
     private String fileFormat;
 
     private Long playCount;

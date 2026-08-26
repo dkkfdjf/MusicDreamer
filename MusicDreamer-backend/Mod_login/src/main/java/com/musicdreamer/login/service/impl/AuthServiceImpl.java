@@ -10,7 +10,6 @@ import com.musicdreamer.login.dto.ChangePasswordDTO;
 import com.musicdreamer.login.dto.LoginDTO;
 import com.musicdreamer.login.dto.RegisterDTO;
 import com.musicdreamer.login.dto.ResetPasswordDTO;
-import com.musicdreamer.login.dto.SendCodeDTO;
 import com.musicdreamer.login.entity.OperationLog;
 import com.musicdreamer.login.entity.User;
 import com.musicdreamer.login.mapper.OperationLogMapper;
@@ -37,9 +36,9 @@ import java.util.UUID;
  *   activate:pending:{userId} = 1            （激活 pending 标记，7 天）
  *   activate:token:{token}    = {userId}      （一次性激活令牌，24 小时）
  *   session:{userId}          = {token}       （主动失效会话记录）
- *   pwd:code:{email}          = {6 位验证码}  （找回密码，10 分钟）
  * Redis 不可用时仅记录日志，不阻断登录等主流程。
  * 邮箱激活验证由 mail.activate-enabled 开关控制（默认关闭）：关闭时注册即可登录。
+ * 找回密码已改为"用户名+邮箱双匹配"直接重置，不再使用邮箱验证码。
  */
 @Slf4j
 @Service
@@ -49,11 +48,9 @@ public class AuthServiceImpl implements AuthService {
     private static final String KEY_PENDING = "activate:pending:";
     private static final String KEY_TOKEN = "activate:token:";
     private static final String KEY_SESSION = "session:";
-    private static final String KEY_CODE = "pwd:code:";
 
     private static final Duration PENDING_TTL = Duration.ofDays(7);
     private static final Duration TOKEN_TTL = Duration.ofHours(24);
-    private static final Duration CODE_TTL = Duration.ofMinutes(10);
 
     /** 前端激活页地址（开发环境）。 */
     private static final String ACTIVATE_URL = "http://localhost:5173/activate?token=";
@@ -161,31 +158,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void sendResetCode(SendCodeDTO dto) {
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getEmail, dto.getEmail()));
-        if (user == null) {
-            throw new BizException(ErrorCode.USER_NOT_FOUND.getCode(), "该邮箱未注册");
-        }
-        String code = String.format("%06d", random.nextInt(1000000));
-        redisSafe("写入找回密码验证码", () ->
-                redis.opsForValue().set(KEY_CODE + dto.getEmail(), code, CODE_TTL));
-        mailService.sendResetCodeEmail(dto.getEmail(), code);
-    }
-
-    @Override
     public void resetPassword(ResetPasswordDTO dto) {
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getEmail, dto.getEmail()));
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getUsername, dto.getUsername())
+                .eq(User::getEmail, dto.getEmail()));
         if (user == null) {
-            throw new BizException(ErrorCode.USER_NOT_FOUND.getCode(), "该邮箱未注册");
-        }
-        String saved = redisGet(KEY_CODE + dto.getEmail());
-        if (saved == null || !saved.equals(dto.getCode())) {
-            throw new BizException(ErrorCode.PARAM_FORMAT_ERROR.getCode(), "验证码错误或已过期");
+            throw new BizException(ErrorCode.USER_NOT_FOUND.getCode(), "用户名与邮箱不匹配");
         }
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, user.getId())
                 .set(User::getPassword, passwordEncoder.encode(dto.getNewPassword())));
-        redisSafe("删除找回密码验证码", () -> redis.delete(KEY_CODE + dto.getEmail()));
         // 密码重置后使旧会话失效
         redisSafe("删除会话记录", () -> redis.delete(KEY_SESSION + user.getId()));
         log.info("找回密码完成 userId={}", user.getId());

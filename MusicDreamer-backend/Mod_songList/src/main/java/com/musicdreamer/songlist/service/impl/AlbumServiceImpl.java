@@ -2,6 +2,7 @@ package com.musicdreamer.songlist.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.musicdreamer.common.api.ErrorCode;
 import com.musicdreamer.common.exception.BizException;
@@ -98,7 +99,7 @@ public class AlbumServiceImpl implements AlbumService {
     @Override
     public Map<String, Object> addSong(Long id, Long songId, Long userId) {
         requireOwnedAlbum(id, userId);
-        songRemoteService.requirePublishedSong(songId);
+        Map<String, Object> song = songRemoteService.requirePublishedSong(songId);
 
         Long exists = albumSongMapper.selectCount(new LambdaQueryWrapper<AlbumSong>()
                 .eq(AlbumSong::getAlbumId, id)
@@ -129,6 +130,8 @@ public class AlbumServiceImpl implements AlbumService {
             return result;
         }
         result.put("sortOrder", nextOrder);
+        // 专辑封面跟随最新加入的歌曲（bug18）
+        refreshCoverFromSong(id, song);
         return result;
     }
 
@@ -140,6 +143,38 @@ public class AlbumServiceImpl implements AlbumService {
                 .eq(AlbumSong::getAlbumId, id)
                 .eq(AlbumSong::getSongId, songId));
         compressSortOrder(id);
+        // 封面改随移除后剩下的最后一首（最新加入的歌）；清空则复位为无封面
+        AlbumSong last = albumSongMapper.selectOne(new LambdaQueryWrapper<AlbumSong>()
+                .eq(AlbumSong::getAlbumId, id)
+                .orderByDesc(AlbumSong::getSortOrder)
+                .last("LIMIT 1"));
+        if (last == null) {
+            refreshCoverFromSong(id, null);
+        } else {
+            try {
+                Map<Long, Map<String, Object>> batch =
+                        songRemoteService.batchSongs(List.of(last.getSongId()));
+                refreshCoverFromSong(id, batch.get(last.getSongId()));
+            } catch (Exception e) {
+                log.warn("album {} cover refresh after remove failed: {}", id, e.getMessage());
+            }
+        }
+    }
+
+    /** 专辑封面 = 最新加入歌曲的封面（song.coverUrl 为空则清空；失败只记日志不影响主流程）。 */
+    private void refreshCoverFromSong(Long albumId, Map<String, Object> song) {
+        try {
+            Object cover = song == null ? null : song.get("coverUrl");
+            String coverUrl = cover == null || "null".equals(cover) ? null : String.valueOf(cover);
+            if (coverUrl != null && coverUrl.isBlank()) {
+                coverUrl = null;
+            }
+            albumMapper.update(null, new LambdaUpdateWrapper<Album>()
+                    .eq(Album::getId, albumId)
+                    .set(Album::getCoverUrl, coverUrl));
+        } catch (Exception e) {
+            log.warn("album {} cover refresh failed: {}", albumId, e.getMessage());
+        }
     }
 
     /** 移除歌曲后压缩序号，保证连续。 */

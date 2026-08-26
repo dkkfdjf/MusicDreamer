@@ -52,6 +52,12 @@
       <artifactId>lombok</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- 歌词繁简转换（bug19）：上传的 LRC 统一转简体 -->
+    <dependency>
+      <groupId>com.github.houbb</groupId>
+      <artifactId>opencc4j</artifactId>
+      <version>1.8.0</version>
+    </dependency>
   </dependencies>
 
   <build>
