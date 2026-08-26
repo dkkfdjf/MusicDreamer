@@ -37,14 +37,14 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
 
 # 邮箱激活验证开关：false=注册即可登录（默认）；true=注册后需邮件激活才能登录
 # 开启时需同时配置 spring.mail（MAIL_HOST/MAIL_USER/MAIL_PASS）
 mail:
   activate-enabled: ${MAIL_ACTIVATE_ENABLED:false}
-  global-config:
-    db-config:
-      id-type: auto
 
 management:
   endpoints:

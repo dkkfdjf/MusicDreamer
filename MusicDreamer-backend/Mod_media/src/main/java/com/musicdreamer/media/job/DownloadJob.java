@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.musicdreamer.common.api.Mess;
 import com.musicdreamer.media.client.MusicClient;
 import com.musicdreamer.media.entity.MediaTask;
+import com.musicdreamer.media.entity.SongRequest;
 import com.musicdreamer.media.exec.ExecResult;
 import com.musicdreamer.media.exec.ProcessExecutor;
+import com.musicdreamer.media.mapper.SongRequestMapper;
+import com.musicdreamer.media.service.FingerprintService;
 import com.musicdreamer.media.service.NetArgs;
 import com.musicdreamer.media.service.SettingsService;
 import com.musicdreamer.media.service.StorageService;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +43,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
             Pattern.CASE_INSENSITIVE);
     private static final Pattern YOUTUBE = Pattern.compile(
             "(youtube\\.com|youtu\\.be|music\\.youtube\\.com)", Pattern.CASE_INSENSITIVE);
+    // 求歌入库标记：SongRequestController 在 source_url 追加 reqid=申请ID
+    private static final Pattern REQID = Pattern.compile("[?&]reqid=(\\d+)");
 
     private final TaskManager tasks;
     private final ProcessExecutor executor;
@@ -46,6 +52,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
     private final SettingsService settings;
     private final StorageService storage;
     private final MusicClient music;
+    private final SongRequestMapper requestMapper;
+    private final FingerprintService fingerprints;
     private final ObjectMapper json = new ObjectMapper();
     private volatile String buvidFile;
     private volatile long buvidAt = 0;
@@ -54,7 +62,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
 
     public DownloadJob(TaskManager tasks, ProcessExecutor executor, ToolsLocator tools,
                        SettingsService settings, StorageService storage, MusicClient music,
-                       NetArgs netArgs) {
+                       NetArgs netArgs, SongRequestMapper requestMapper,
+                       FingerprintService fingerprints) {
         this.tasks = tasks;
         this.executor = executor;
         this.tools = tools;
@@ -62,6 +71,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
         this.storage = storage;
         this.music = music;
         this.netArgs = netArgs;
+        this.requestMapper = requestMapper;
+        this.fingerprints = fingerprints;
         tasks.runnerLocator().register(TaskManager.DOWNLOAD, this);
     }
 
@@ -72,7 +83,7 @@ public class DownloadJob implements TaskManager.TaskRunner {
         // 歌曲展示要干净链接，先剥掉标记再往下传
         boolean wantSubtitle = url.contains("wantSubtitle=1") || url.contains("#sub");
         boolean wantLyrics = url.contains("mdlyric=1");
-        String cleanUrl = url.replaceAll("[?&](wantSubtitle=1|mdlyric=1)", "");
+        String cleanUrl = url.replaceAll("[?&](wantSubtitle=1|mdlyric=1|reqid=\\d+)", "");
         Path taskDir = storage.dir("task");
         String ytdlp = tools.locate(ToolsLocator.YT_DLP);
         String ffmpeg = tools.locate(ToolsLocator.FFMPEG);
@@ -194,6 +205,9 @@ public class DownloadJob implements TaskManager.TaskRunner {
                 throw new IllegalStateException("歌曲文件地址回写失败");
             }
             tasks.attachSong(task.getId(), songId);
+            fulfillRequest(task, songId, url);
+            // 听歌识曲指纹：入库即生成（失败不阻断，管理后台可重建补齐）
+            fingerprints.ingestQuiet(songId, finalMp3);
             tasks.progress(task.getId(), 85, "入库完成（待审核），执行后置任务…");
 
             // ⑥ 后置：响度必做；字幕 / 自动获取歌词按导入开关（控制器写入的 URL 标记，
@@ -297,6 +311,28 @@ public class DownloadJob implements TaskManager.TaskRunner {
         if (stage == null) return 0;
         Matcher m = Pattern.compile("第 (\\d+) 次").matcher(stage);
         return m.find() ? Integer.parseInt(m.group(1)) : 0;
+    }
+
+    /** 求歌回填：管理员从求歌页发起的下载带 reqid 标记，入库成功即自动完成申请。 */
+    private void fulfillRequest(MediaTask task, Long songId, String url) {
+        Matcher m = REQID.matcher(url);
+        if (!m.find()) {
+            return;
+        }
+        try {
+            SongRequest req = requestMapper.selectById(Long.parseLong(m.group(1)));
+            if (req == null || req.getStatus() == null || req.getStatus() != 0) {
+                return;
+            }
+            req.setStatus(1);
+            req.setResultSongId(songId);
+            req.setHandledBy(task.getOperator());
+            req.setHandledAt(LocalDateTime.now());
+            requestMapper.updateById(req);
+        } catch (Exception e) {
+            // 回填失败不影响下载主流程；管理员可用手动回填兜底
+            log.warn("song request fulfill failed for task {}: {}", task.getId(), e.getMessage());
+        }
     }
 
     private String textOr(JsonNode node, String field, String def) {

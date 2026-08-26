@@ -38,8 +38,7 @@ management:
         include: health,info,prometheus
 
 upload:
-  # 本地开发默认指向项目内 data 目录；原作者机器为 D:/Desktop/MusicDreamer/backend/data，
-  # 拉到本地后这里会被覆盖（STORAGE_ROOT 环境变量优先）。如设置服务里另行存了 storage_root，
-  # 需要保证两端一致，否则 Mod_media 写入与 Mod_upload 读取会落到不同目录，B 站导入必 404。
-  storage-root: ${STORAGE_ROOT:C:/Users/34392/Desktop/项目3/MusicDreamer-backend/data}
+  # 直接读 yml（不走设置服务），需与 Mod_media 的 storage_root 保持一致，
+  # 否则 Mod_media 写入与 Mod_upload 读取落到不同目录，B 站导入必 404。
+  storage-root: ${STORAGE_ROOT:D:/Desktop/MusicDreamer/backend/data}
 

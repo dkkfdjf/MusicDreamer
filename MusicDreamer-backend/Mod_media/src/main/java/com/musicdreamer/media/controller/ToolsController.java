@@ -11,16 +11,10 @@ import com.musicdreamer.media.tools.ToolsMgmtJob;
 import com.musicdreamer.media.tools.ToolsStatusCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,9 +32,6 @@ public class ToolsController {
     private final SettingsService settings;
     private final StorageService storage;
     private final ToolsStatusCache statusCache;
-    private final HttpClient http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(Duration.ofSeconds(10)).build();
 
     // 转写模型只提供 small：中日文识别质量直接决定歌词校准/加时间轴的
     // 准确性，多规格选择对普通用户只是负担（占磁盘 + 选错质量差）
@@ -72,7 +63,6 @@ public class ToolsController {
             item.put("path", path);
             item.put("version", version);
             item.put("alive", version != null);
-            item.put("latest", tool.equals(ToolsLocator.YT_DLP) ? githubLatest() : null);
             list.add(item);
         }
         statusCache.putStatus(list);
@@ -148,36 +138,5 @@ public class ToolsController {
     public Mess modelDelete(@PathVariable String key) {
         // small 是唯一规格且恒为当前使用，不提供删除
         return Mess.fail(2007, "唯一模型不允许删除");
-    }
-
-    /** GitHub 最新版比对（yt-dlp 版本号即日期）。成功缓存 1 小时；国内访问常超时，失败 10 分钟内不重试。 */
-    private String githubLatest() {
-        long now = System.currentTimeMillis();
-        String latest = statusCache.latest();
-        if (statusCache.latestAt() > 0
-                && now - statusCache.latestAt() < (latest == null ? 600_000 : 3_600_000)) {
-            return latest;
-        }
-        try {
-            HttpRequest req = HttpRequest.newBuilder(
-                            URI.create("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"))
-                    .header(HttpHeaders.USER_AGENT, "MusicDreamer-Updater")
-                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
-                    .timeout(Duration.ofSeconds(3)).build();
-            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-            String body = resp.body();
-            int i = body.indexOf("\"tag_name\"");
-            if (i >= 0) {
-                int s = body.indexOf('"', i + 11) + 1;
-                int e = body.indexOf('"', s);
-                latest = body.substring(s, e);
-                statusCache.putLatest(latest);
-                return latest;
-            }
-        } catch (Exception e) {
-            log.warn("github latest check failed: {}", e.getMessage());
-        }
-        statusCache.putLatest(latest);
-        return latest;
     }
 }
