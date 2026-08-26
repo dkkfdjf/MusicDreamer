@@ -18,6 +18,10 @@
           <input id="reg-username" v-model="form.username" type="text" placeholder="3-50 位用户名" />
         </div>
         <div class="input-group">
+          <label for="reg-nickname">昵称</label>
+          <input id="reg-nickname" v-model="form.nickname" type="text" placeholder="2-50 位昵称，用于显示" />
+        </div>
+        <div class="input-group">
           <label for="reg-email">邮箱</label>
           <input id="reg-email" v-model="form.email" type="text" placeholder="用于激活与找回密码" />
         </div>
@@ -51,7 +55,7 @@ import { gsap, prefersReduced } from '../utils/motion'
 import api from '../api'
 
 const router = useRouter()
-const form = reactive({ username: '', email: '', password: '' })
+const form = reactive({ username: '', nickname: '', email: '', password: '' })
 const confirm = ref('')
 const loading = ref(false)
 const waveEl = ref(null)
@@ -74,13 +78,13 @@ onMounted(() => {
 onBeforeUnmount(() => { if (waveTl) waveTl.kill() })
 
 async function doRegister() {
-  if (!form.username || !form.email || !form.password) return message.warning('请填写完整')
+  if (!form.username || !form.nickname || !form.email || !form.password) return message.warning('请填写完整')
   if (form.password.length < 6) return message.warning('密码至少 6 位')
   if (form.password !== confirm.value) return message.warning('两次密码不一致')
   loading.value = true
   try {
     await api.register(form)
-    message.success('注册成功，请查收激活邮件后登录（未配置邮箱时见后端日志中的激活链接）')
+    message.success('注册成功，请登录')
     router.push('/login')
   } finally {
     loading.value = false

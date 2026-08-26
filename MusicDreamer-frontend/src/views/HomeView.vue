@@ -228,7 +228,7 @@ function drawSpectrum() {
       g.clearRect(0, 0, w, h)
       if (specAnalyser && playerStore.playing) specAnalyser.getByteFrequencyData(specFreq)
       const gap = 3
-      const bw = (w - gap * (SPEC_BARS - 1)) / SPEC_BARS
+      const bw = Math.max(1, (w - gap * (SPEC_BARS - 1)) / SPEC_BARS)
       let alive = false
       for (let i = 0; i < SPEC_BARS; i++) {
         const t = i / (SPEC_BARS - 1)
@@ -241,7 +241,7 @@ function drawSpectrum() {
         g.globalAlpha = 0.5 + specBands[i] * 0.5
         g.fillStyle = SPEC_COLORS[i]
         g.beginPath()
-        if (g.roundRect) g.roundRect(x, h - bh, bw, bh, Math.min(bw / 2, 2))
+        if (g.roundRect) g.roundRect(x, h - bh, bw, bh, Math.max(0, Math.min(bw / 2, 2)))
         else g.rect(x, h - bh, bw, bh)
         g.fill()
       }

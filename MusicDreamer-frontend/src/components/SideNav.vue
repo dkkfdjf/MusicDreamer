@@ -85,6 +85,10 @@
           </span>
           <span class="nav-text">管理后台</span>
         </router-link>
+        <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">个人设置</span>
+        </router-link>
       </template>
     </nav>
 
