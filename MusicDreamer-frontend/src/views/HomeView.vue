@@ -228,6 +228,8 @@ function drawSpectrum() {
       g.clearRect(0, 0, w, h)
       if (specAnalyser && playerStore.playing) specAnalyser.getByteFrequencyData(specFreq)
       const gap = 3
+      // 宽度瞬变期（歌词栏开合挤压）算出的 bw 可为负：钳到 1 防止
+      // roundRect 收负半径抛 RangeError 打死 rAF 循环
       const bw = Math.max(1, (w - gap * (SPEC_BARS - 1)) / SPEC_BARS)
       let alive = false
       for (let i = 0; i < SPEC_BARS; i++) {
@@ -705,6 +707,27 @@ watch(reportTarget, (v) => { reportVisible.value = !!v })
 }
 
 /* ---------- 响应式 ---------- */
+/* 歌词栏展开时内容净宽少 402px，但媒体查询只看窗口宽度感知不到：
+   两栏 hero 里固定 780px 的轮播会把 meta 列挤成窄条——歌名截断、
+   频谱归零。lyrics-on 由 App.vue 挂在 .content-row 上，提前降级单列 */
+.lyrics-on .hero {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+}
+.lyrics-on .eyebrow {
+  justify-content: center;
+}
+.lyrics-on .hero-meta .actions {
+  justify-content: center;
+}
+.lyrics-on .carousel {
+  order: -1;
+  width: min(780px, 100%);
+  --side-x: 200px;
+  --far-x: 260px;
+}
+
 /* 两栏 hero（meta+coverflow）需要 232 侧栏+72 内边距+780 轮播+~330 meta ≈ 1414，
    再窄改单列纵向排布，避免挤压文字和裁切侧卡 */
 @media (max-width: 1440px) {

@@ -26,6 +26,12 @@
               <path d="M21 3v6h-6" />
             </svg>
           </button>
+          <button class="close" title="关闭歌词面板（也可再点播放条的「詞」）" @click="lyrics.togglePanel()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </header>
 
         <!-- 一键获取进度 -->
@@ -258,6 +264,18 @@ watch(() => player.current && player.current.lyricUrl, () => {
 .refresh:disabled { opacity: 0.4; cursor: not-allowed; }
 .refresh.busy svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  transition: all 0.2s ease;
+}
+.close:hover { background: rgba(92, 72, 50, 0.07); color: var(--text); }
 
 /* ---------- 获取进度 ---------- */
 .task { padding: 12px 20px 4px; flex-shrink: 0; }

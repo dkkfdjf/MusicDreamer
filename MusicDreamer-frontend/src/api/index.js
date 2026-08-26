@@ -213,6 +213,34 @@ export const api = {
   toolsStatus: () => get('/media/tools/status'),
   // 通用工具安装/更新：没有就下载，有就更新（tools.manifest.json → tools/bin/）
   toolInstall: (tool) => post(`/media/tools/install/${tool}`),
+  // whisper 转写模型（ggml，data/models/）：列表与下载
+  toolsModels: () => get('/media/models'),
+  modelDownload: (key) => post(`/media/models/${key}/download`),
+
+  // ---------- 求歌申请（听歌识曲一期） ----------
+  // 用户提交/查看自己的求歌；管理员的列表、拒绝、回填、搜索入库
+  requestSubmit: (data) => post('/media/requests', data),
+  requestMine: () => get('/media/requests/mine'),
+  requestList: (params) => get('/media/requests', params),
+  requestReject: (id, reason) => put(`/media/requests/${id}/reject`, { reason }),
+  requestFulfill: (id, songId) => put(`/media/requests/${id}/fulfill`, { songId }),
+  // 求歌入库：候选视频 URL → 下载任务，成功后后端自动回填申请状态
+  requestDownload: (id, url) => post(`/media/requests/${id}/download`, { url }),
+  // bilisearch 候选搜索（yt-dlp --flat-playlist，只拉元数据，1~3 秒）
+  recognizeSearch: (kw) => get('/media/recognize/search', { kw }),
+
+  // ---------- 听歌识曲（二期本库指纹 + 三期 ACRCloud 外置兜底） ----------
+  // 上传录音片段比对曲库（FormData：file + source tab/mic/file + last 最后一轮标记）
+  // last=1 时本地 MISS 才动用外置识别（省第三方额度，每次识曲最多调一次）
+  recognize: (file, source, isFinal) => {
+    const fd = new FormData()
+    fd.append('file', file, 'clip.webm')
+    fd.append('source', source || 'file')
+    fd.append('last', isFinal ? '1' : '0')
+    return post('/media/recognize', fd, { timeout: 60000 })
+  },
+  fingerprintStatus: () => get('/media/fingerprints/status'),
+  fingerprintRebuild: () => post('/media/fingerprints/rebuild'),
 
   // ---------- 配置 ----------
   settingAll: () => get('/setting/all'),

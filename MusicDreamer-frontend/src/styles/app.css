@@ -465,6 +465,28 @@ select {
   border-color: rgba(255, 107, 26, 0.55);
 }
 
+/* 听歌识曲入口：搜索框右侧的圆钮，与搜索框同一视觉层级 */
+.recog-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 37px;
+  height: 37px;
+  margin-left: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.recog-btn:hover {
+  border-color: rgba(255, 107, 26, 0.55);
+  color: var(--accent, #ff6b1a);
+}
+
 .search-container .search-icon {
   flex-shrink: 0;
 }

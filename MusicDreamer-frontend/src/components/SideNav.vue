@@ -75,6 +75,16 @@
           </span>
           <span class="nav-text">歌手认证</span>
         </div>
+        <div v-if="user.isLogin" class="nav-item" @click="openSongRequest">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+          </span>
+          <span class="nav-text">求歌</span>
+        </div>
         <router-link v-if="user.isAdmin" to="/admin" class="nav-item"
           :class="{ active: isActive('/admin') }">
           <span class="nav-icon">
@@ -171,5 +181,9 @@ function isActive(path) {
 
 function openApply() {
   window.dispatchEvent(new Event('md-open-singer-apply'))
+}
+
+function openSongRequest() {
+  window.dispatchEvent(new Event('md-open-song-request'))
 }
 </script>
