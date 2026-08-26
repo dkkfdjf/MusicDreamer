@@ -38,11 +38,20 @@ management:
         include: health,info,prometheus
 
 media:
-  storage-root: ${STORAGE_ROOT:D:/Desktop/MusicDreamer/backend/data}
+  # 本地开发默认指向项目内 data 目录；原作者机器为 D:/Desktop/MusicDreamer/backend/data。
+  # 注意：Mod_media 实际生效值还会被设置服务里的 storage_root 覆盖（60s 缓存），
+  # 若 setting 表里存了别的值，会与 Mod_upload 不一致，导致 B 站导入歌曲播放 404。
+  storage-root: ${STORAGE_ROOT:C:/Users/34392/Desktop/项目3/MusicDreamer-backend/data}
   tools-path: ${TOOLS_PATH:}
   volume-target-lufs: -16
   download-concurrency: 1
   transcribe-concurrency: 2
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 30000
   sentinel:
     transport:
       dashboard: ${SENTINEL_DASH:localhost:8858}

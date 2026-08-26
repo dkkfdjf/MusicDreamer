@@ -20,6 +20,7 @@ import com.musicdreamer.login.service.MailService;
 import com.musicdreamer.login.vo.LoginVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ import java.util.UUID;
  *   session:{userId}          = {token}       （主动失效会话记录）
  *   pwd:code:{email}          = {6 位验证码}  （找回密码，10 分钟）
  * Redis 不可用时仅记录日志，不阻断登录等主流程。
+ * 邮箱激活验证由 mail.activate-enabled 开关控制（默认关闭）：关闭时注册即可登录。
  */
 @Slf4j
 @Service
@@ -63,6 +65,10 @@ public class AuthServiceImpl implements AuthService {
     private final MailService mailService;
     private final SecureRandom random = new SecureRandom();
 
+    /** 邮箱激活验证开关：false=注册即可登录；true=需邮件激活后才能登录。 */
+    @Value("${mail.activate-enabled:false}")
+    private boolean activateEnabled;
+
     @Override
     public Long register(RegisterDTO dto) {
         if (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername())) > 0) {
@@ -76,19 +82,22 @@ public class AuthServiceImpl implements AuthService {
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setEmail(dto.getEmail());
-        user.setNickname(dto.getUsername());
+        user.setNickname(StringUtils.hasText(dto.getNickname()) ? dto.getNickname() : dto.getUsername());
         user.setRole(0);
         user.setSingerStatus(0);
         user.setStatus(1);
         userMapper.insert(user);
 
-        String token = UUID.randomUUID().toString().replace("-", "");
-        redisSafe("写入激活标记", () -> {
-            redis.opsForValue().set(KEY_PENDING + user.getId(), "1", PENDING_TTL);
-            redis.opsForValue().set(KEY_TOKEN + token, String.valueOf(user.getId()), TOKEN_TTL);
-        });
-        mailService.sendActivateEmail(dto.getEmail(), ACTIVATE_URL + token);
-        log.info("注册成功 userId={} username={}", user.getId(), user.getUsername());
+        // 激活验证关闭时：不写 pending 标记、不发邮件，注册即可登录
+        if (activateEnabled) {
+            String token = UUID.randomUUID().toString().replace("-", "");
+            redisSafe("写入激活标记", () -> {
+                redis.opsForValue().set(KEY_PENDING + user.getId(), "1", PENDING_TTL);
+                redis.opsForValue().set(KEY_TOKEN + token, String.valueOf(user.getId()), TOKEN_TTL);
+            });
+            mailService.sendActivateEmail(dto.getEmail(), ACTIVATE_URL + token);
+        }
+        log.info("注册成功 userId={} username={} emailActivate={}", user.getId(), user.getUsername(), activateEnabled);
         return user.getId();
     }
 
@@ -110,7 +119,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginVO login(LoginDTO dto, HttpServletRequest request) {
-        // 依次校验：存在(2001) → 状态(2005) → 激活标记(2004) → 密码(2003)
+        // 依次校验：存在(2001) → 状态(2005) → 激活标记(2004，仅开关开启时) → 密码(2003)
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername()));
         if (user == null) {
             throw new BizException(ErrorCode.USER_NOT_FOUND);
@@ -118,7 +127,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() != null && user.getStatus() == 0) {
             throw new BizException(ErrorCode.USER_DISABLED);
         }
-        if ("1".equals(redisGet(KEY_PENDING + user.getId()))) {
+        if (activateEnabled && "1".equals(redisGet(KEY_PENDING + user.getId()))) {
             throw new BizException(ErrorCode.EMAIL_NOT_VERIFIED);
         }
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
