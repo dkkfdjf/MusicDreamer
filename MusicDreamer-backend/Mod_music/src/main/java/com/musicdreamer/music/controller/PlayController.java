@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.validation.Valid;
+
 /** 播放统计控制器：/api/v1/music（上报/最近播放/历史）。 */
 @RestController
 @RequestMapping("/api/v1/music")
@@ -25,7 +27,7 @@ public class PlayController {
 
     /** 播放上报（登录）：前端 audio ended 触发，播完才计。 */
     @PostMapping("/playReport")
-    public Mess playReport(@RequestBody PlayReportDTO dto) {
+    public Mess playReport(@Valid @RequestBody PlayReportDTO dto) {
         playService.playReport(dto, WebUtil.clientIp());
         return Mess.ok();
     }

@@ -143,31 +143,44 @@ public class AlbumServiceImpl implements AlbumService {
                 .eq(AlbumSong::getAlbumId, id)
                 .eq(AlbumSong::getSongId, songId));
         compressSortOrder(id);
-        // 封面改随移除后剩下的最后一首（最新加入的歌）；清空则复位为无封面
-        AlbumSong last = albumSongMapper.selectOne(new LambdaQueryWrapper<AlbumSong>()
+        // 封面回退：找剩余歌曲里最新一首"带封面"的；一首带封面的都没有才复位无封面（P1-4）
+        List<AlbumSong> rest = albumSongMapper.selectList(new LambdaQueryWrapper<AlbumSong>()
                 .eq(AlbumSong::getAlbumId, id)
                 .orderByDesc(AlbumSong::getSortOrder)
-                .last("LIMIT 1"));
-        if (last == null) {
+                .orderByDesc(AlbumSong::getId));
+        if (rest.isEmpty()) {
             refreshCoverFromSong(id, null);
-        } else {
-            try {
-                Map<Long, Map<String, Object>> batch =
-                        songRemoteService.batchSongs(List.of(last.getSongId()));
-                refreshCoverFromSong(id, batch.get(last.getSongId()));
-            } catch (Exception e) {
-                log.warn("album {} cover refresh after remove failed: {}", id, e.getMessage());
+            return;
+        }
+        try {
+            Map<Long, Map<String, Object>> batch = songRemoteService.batchSongs(
+                    rest.stream().map(AlbumSong::getSongId).toList());
+            for (AlbumSong row : rest) {
+                Map<String, Object> s = batch.get(row.getSongId());
+                Object cover = s == null ? null : s.get("coverUrl");
+                if (cover != null && !"null".equals(cover) && !String.valueOf(cover).isBlank()) {
+                    refreshCoverFromSong(id, s);
+                    return;
+                }
             }
+            refreshCoverFromSong(id, null); // 剩余全无封面
+        } catch (Exception e) {
+            log.warn("album {} cover refresh after remove failed: {}", id, e.getMessage());
         }
     }
 
-    /** 专辑封面 = 最新加入歌曲的封面（song.coverUrl 为空则清空；失败只记日志不影响主流程）。 */
+    /** 专辑封面跟随歌曲（bug18，P1-4 收口）：song 带封面则更新；
+     *  song 非空但无封面 → 保留现有封面不清空；song 为 null → 复位无封面。
+     *  失败只记日志不影响主流程。 */
     private void refreshCoverFromSong(Long albumId, Map<String, Object> song) {
         try {
-            Object cover = song == null ? null : song.get("coverUrl");
-            String coverUrl = cover == null || "null".equals(cover) ? null : String.valueOf(cover);
-            if (coverUrl != null && coverUrl.isBlank()) {
-                coverUrl = null;
+            String coverUrl = null;
+            if (song != null) {
+                Object cover = song.get("coverUrl");
+                coverUrl = cover == null || "null".equals(cover) ? null : String.valueOf(cover);
+                if (coverUrl == null || coverUrl.isBlank()) {
+                    return; // 该歌无封面：不动专辑现有封面
+                }
             }
             albumMapper.update(null, new LambdaUpdateWrapper<Album>()
                     .eq(Album::getId, albumId)

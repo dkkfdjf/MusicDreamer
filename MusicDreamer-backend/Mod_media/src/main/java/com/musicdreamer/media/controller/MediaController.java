@@ -62,6 +62,10 @@ public class MediaController {
         if (!SUPPORTED.matcher(url).find()) {
             throw new BizException(ErrorCode.FILE_TYPE_UNSUPPORTED.getCode(), "不支持的链接");
         }
+        // bug12 收口（P1-3）：风格必填必须在服务端强制，不能只靠前端（API 直调可绕过）
+        if (dto.getStyle() == null || dto.getStyle().isBlank()) {
+            throw new BizException(ErrorCode.PARAM_MISSING.getCode(), "请选择风格");
+        }
         // MediaTask 表没有开关列，按 DownloadJob 既有约定把选项写进 source_url 标记。
         // mdlyric 避开 B 站真实的 ?t= 时间戳参数，防止无开关时被误判；
         // style 为必选风格（bug12），URL 编码后随标记透传

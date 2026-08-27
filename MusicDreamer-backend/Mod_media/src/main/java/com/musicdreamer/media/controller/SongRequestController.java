@@ -186,14 +186,12 @@ public class SongRequestController {
         if (ytdlp == null) {
             return Mess.fail(5003, "yt-dlp 未安装");
         }
-        List<String> cmd = new ArrayList<>(List.of(ytdlp, "-J", "--playlist-end", "5",
+        List<String> cmd = new ArrayList<>(List.of(ytdlp, "-J", "--ignore-errors", "--playlist-end", "5",
                 "bilisearch5:" + k));
         cmd.addAll(netArgs.build("https://www.bilibili.com"));
         ExecResult r = executor.run(cmd, 45_000L, null, null).join();
-        if (r.getExitCode() != 0) {
-            log.warn("bilisearch failed: {}", brief(r.getStderr()));
-            return Mess.fail(5003, "搜索失败：" + brief(r.getStderr()));
-        }
+        // 解析先行（P1-5）：单条坏结果（如 B 站课程页 extractor 不支持）只跳过该条，
+        // 不再拖挂整个搜索；仅当"退出码非零且一条都没解析到"才判失败
         List<Map<String, Object>> out = new ArrayList<>();
         try {
             JsonNode entries = json.readTree(r.getStdout()).path("entries");
@@ -224,7 +222,15 @@ public class SongRequestController {
             }
         } catch (Exception e) {
             log.warn("bilisearch parse failed: {}", e.getMessage());
-            return Mess.fail(5003, "搜索结果解析失败");
+        }
+        if (out.isEmpty()) {
+            if (r.getExitCode() != 0) {
+                log.warn("bilisearch failed: {}", brief(r.getStderr()));
+                return Mess.fail(5003, "搜索失败：" + brief(r.getStderr()));
+            }
+        } else if (r.getExitCode() != 0) {
+            log.info("bilisearch exit={} but {} candidates parsed, bad entries skipped",
+                    r.getExitCode(), out.size());
         }
         return Mess.ok(out);
     }

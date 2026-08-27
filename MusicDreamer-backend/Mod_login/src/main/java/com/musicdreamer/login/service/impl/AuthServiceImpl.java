@@ -36,6 +36,7 @@ import java.util.UUID;
  *   activate:pending:{userId} = 1            （激活 pending 标记，7 天）
  *   activate:token:{token}    = {userId}      （一次性激活令牌，24 小时）
  *   session:{userId}          = {token}       （主动失效会话记录）
+ *   md_auth_floor:{userId}    = {epochMillis} （认证地板：早于该时刻签发的 token 由网关拒绝）
  * Redis 不可用时仅记录日志，不阻断登录等主流程。
  * 邮箱激活验证由 mail.activate-enabled 开关控制（默认关闭）：关闭时注册即可登录。
  * 找回密码已改为"用户名+邮箱双匹配"直接重置，不再使用邮箱验证码。
@@ -48,6 +49,8 @@ public class AuthServiceImpl implements AuthService {
     private static final String KEY_PENDING = "activate:pending:";
     private static final String KEY_TOKEN = "activate:token:";
     private static final String KEY_SESSION = "session:";
+    /** 认证地板键（网关 AuthGlobalFilter 同名约定）：改密/重置/禁用时抬升。 */
+    public static final String KEY_AUTH_FLOOR = "md_auth_floor:";
 
     private static final Duration PENDING_TTL = Duration.ofDays(7);
     private static final Duration TOKEN_TTL = Duration.ofHours(24);
@@ -168,8 +171,9 @@ public class AuthServiceImpl implements AuthService {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, user.getId())
                 .set(User::getPassword, passwordEncoder.encode(dto.getNewPassword())));
-        // 密码重置后使旧会话失效
+        // 密码重置后使旧会话失效，并抬升认证地板让网关拒绝旧 token（P1-1）
         redisSafe("删除会话记录", () -> redis.delete(KEY_SESSION + user.getId()));
+        bumpAuthFloor(user.getId());
         log.info("找回密码完成 userId={}", user.getId());
     }
 
@@ -186,7 +190,29 @@ public class AuthServiceImpl implements AuthService {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId)
                 .set(User::getPassword, passwordEncoder.encode(dto.getNewPassword())));
+        // 改密成功：吊销全部旧 token（P1-1）
+        bumpAuthFloor(userId);
         log.info("修改密码成功 userId={}", userId);
+    }
+
+    /** 抬升认证地板（取现值与当前时间的较大者）；网关据此拒绝早于该时刻签发的 token。 */
+    void bumpAuthFloor(Long userId) {
+        long floor = System.currentTimeMillis();
+        redisSafe("抬升认证地板", () -> {
+            String key = KEY_AUTH_FLOOR + userId;
+            String cur = redis.opsForValue().get(key);
+            if (cur == null || parseLongSafely(cur) < floor) {
+                redis.opsForValue().set(key, String.valueOf(floor));
+            }
+        });
+    }
+
+    private long parseLongSafely(String v) {
+        try {
+            return Long.parseLong(v.trim());
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     /** 登录操作日志（失败不影响登录主流程）。 */

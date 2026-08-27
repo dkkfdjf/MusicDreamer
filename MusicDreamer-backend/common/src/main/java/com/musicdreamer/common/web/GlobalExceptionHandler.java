@@ -6,6 +6,7 @@ import com.musicdreamer.common.exception.BizException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -37,6 +38,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Mess> typeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.badRequest()
                 .body(Mess.fail(ErrorCode.PARAM_FORMAT_ERROR));
+    }
+
+    /** 请求体本身不可读（非法 JSON/非法 UTF-8/字段类型错）：归为 400 参数错误，而非兜底 500。 */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Mess> notReadable(HttpMessageNotReadableException e) {
+        log.warn("request body not readable: {}", e.getMessage());
+        return ResponseEntity.badRequest()
+                .body(Mess.fail(ErrorCode.PARAM_FORMAT_ERROR.getCode(), "请求体格式错误"));
     }
 
     @ExceptionHandler(Exception.class)

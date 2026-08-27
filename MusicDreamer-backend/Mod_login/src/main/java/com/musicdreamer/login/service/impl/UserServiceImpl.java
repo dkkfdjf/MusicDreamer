@@ -36,6 +36,10 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final SingerProfileMapper profileMapper;
     private final PasswordEncoder passwordEncoder;
+    private final org.springframework.data.redis.core.StringRedisTemplate redis;
+
+    /** 认证地板键（与 AuthServiceImpl/网关约定一致）。 */
+    private static final String KEY_AUTH_FLOOR = "md_auth_floor:";
 
     @Override
     public UserVO info(Long userId) {
@@ -98,6 +102,20 @@ public class UserServiceImpl implements UserService {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, dto.getUserId())
                 .set(User::getStatus, dto.getStatus()));
+        // 禁用即吊销该用户全部存量 token（P1-1）：网关按认证地板拒绝旧 token。
+        // 启用不清地板——被禁期间签发的 token 恢复后依然无效，需重新登录
+        if (dto.getStatus() == 0) {
+            long floor = System.currentTimeMillis();
+            try {
+                String key = KEY_AUTH_FLOOR + dto.getUserId();
+                String cur = redis.opsForValue().get(key);
+                if (cur == null || Long.parseLong(cur.trim()) < floor) {
+                    redis.opsForValue().set(key, String.valueOf(floor));
+                }
+            } catch (Exception e) {
+                log.warn("抬升认证地板失败 userId={}: {}", dto.getUserId(), e.getMessage());
+            }
+        }
     }
 
     @Override

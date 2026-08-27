@@ -8,6 +8,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,13 +23,21 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * 统一鉴权过滤器（设计 4.2 节）：
- * 白名单放行 → 解析 JWT → 剥离伪造头并透传身份 → 管理员/上传者路由角色校验。
+ * 白名单放行 → 解析 JWT → 吊销地板检查 → 剥离伪造头并透传身份 → 管理员/上传者路由角色校验。
  */
 @Slf4j
 @Component
 public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     private final AntPathMatcher matcher = new AntPathMatcher();
+    private final ReactiveStringRedisTemplate redis;
+
+    public AuthGlobalFilter(ReactiveStringRedisTemplate redis) {
+        this.redis = redis;
+    }
+
+    /** 认证地板：改密/重置/禁用时由 Mod_login 写入，早于该时刻签发的 token 一律拒绝。 */
+    private static final String AUTH_FLOOR_KEY = "md_auth_floor:";
 
     /** 匿名可访问。 */
     private static final String[] WHITELIST = {
@@ -51,12 +60,12 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/album/*",
     };
 
-    /** 需要 role=2（管理员）。 */
+    /** 需要 role=2（管理员）。举报只拦管理动作：提交是登录用户皆可（bug 复盘 P1-2）。 */
     private static final String[] ADMIN_PATHS = {
             "/api/v1/user/list*", "/api/v1/user/status", "/api/v1/user/singer/audit",
             "/api/v1/song/audit", "/api/v1/song/takedown/**", "/api/v1/song/relist/**",
             "/api/v1/song/delete/**", "/api/v1/song/edit/**", "/api/v1/song/admin/**",
-            "/api/v1/report/**",
+            "/api/v1/report/list*", "/api/v1/report/handle",
             "/api/v1/media/tools/**", "/api/v1/media/models/*/download",
             "/api/v1/media/models/*/use", "/api/v1/media/models/*/delete",
             "/api/v1/media/loudness/batch", "/api/v1/setting/set/**",
@@ -93,7 +102,28 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         Long userId = claims.get(JwtUtil.CLAIM_USER_ID, Number.class).longValue();
         Integer role = claims.get(JwtUtil.CLAIM_ROLE, Number.class).intValue();
         String username = String.valueOf(claims.get(JwtUtil.CLAIM_USERNAME));
+        long issuedAtMs = claims.getIssuedAt() == null ? 0 : claims.getIssuedAt().getTime();
 
+        // 吊销地板检查（P1-1）：改密/重置/禁用后旧 token 当场失效。
+        // 必须保持响应式链——在 Netty 事件循环线程里 block() 会抛异常导致 fail-open 静默失效；
+        // iat 秒级精度留 1 秒宽限；Redis 异常/键缺失时放行（fail-open）。
+        return redis.opsForValue().get(AUTH_FLOOR_KEY + userId)
+                .map(this::safeParseLong)
+                .defaultIfEmpty(0L)
+                .onErrorReturn(0L)
+                .flatMap(floor -> {
+                    // JWT iat 只有秒级精度：宽限 1 秒——与抬升同一秒内签发的 token 放行，
+                    // 更早签发的一律拒绝（floor 侧不额外加缓冲，避免误杀改密后的新登录）
+                    if (floor > 0 && floor - issuedAtMs > 1000) {
+                        return reject(exchange, HttpStatus.UNAUTHORIZED, 2006, "登录状态已变更，请重新登录");
+                    }
+                    return proceed(exchange, chain, path, userId, role, username);
+                });
+    }
+
+    /** 地板检查通过后的公共尾段：角色路由校验 + 身份头透传。 */
+    private Mono<Void> proceed(ServerWebExchange exchange, GatewayFilterChain chain,
+                               String path, Long userId, Integer role, String username) {
         if (matchAny(path, ADMIN_PATHS) && role != 2) {
             return reject(exchange, HttpStatus.FORBIDDEN, 2007, "权限不足");
         }
@@ -126,6 +156,15 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             if (matcher.match(p, path)) return true;
         }
         return false;
+    }
+
+    /** 宽松解析；脏值当 0（不吊销）。 */
+    private long safeParseLong(String v) {
+        try {
+            return Long.parseLong(v.trim());
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     private Mono<Void> reject(ServerWebExchange exchange, HttpStatus status, int code, String msg) {
