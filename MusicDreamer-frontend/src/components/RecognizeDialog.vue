@@ -12,11 +12,12 @@
         </div>
       </div>
       <div class="rec-desc">{{ MODE_DESC[mode] }}</div>
-      <!-- bug61：勾选共享音频是最常见的失败点，系统声音模式给出分步指引 -->
+      <!-- bug61：勾选共享音频是最常见的失败点，系统声音模式给出分步指引。
+           bug61b：两种声音来源要分开教——网页里的歌走标签页；后台软件只能走整个屏幕+系统音频 -->
       <div v-if="mode === 'tab'" class="rec-steps">
-        <span>① 弹出选择框后，切到「标签页」一栏</span>
-        <span>② 选中正在播放音乐的标签页</span>
-        <span>③ 勾选左下角「同时共享标签页音频」，再点「共享」</span>
+        <span>① 网页里放的歌：切到「标签页」，选中播放页并勾选「同时共享标签页音频」</span>
+        <span>② 后台软件/播放器放的歌：切到「整个屏幕」，勾选「同时也共享系统音频」（需 Win10 及较新浏览器）</span>
+        <span>③ 单个「窗口」模式拿不到任何声音（浏览器限制），不要选它</span>
       </div>
       <div v-if="mode !== 'file'" class="rec-act">
         <el-button type="danger" round size="large" class="rec-start" @click="start">● 开始识曲</el-button>
@@ -130,7 +131,7 @@ const MODES = [
   { key: 'file', label: '本地文件', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' }
 ]
 const MODE_DESC = {
-  tab: '听电脑正在播放的声音（刷视频想知道 BGM 用这个），选择标签页时记得勾选「共享音频」',
+  tab: '听电脑正在播放的声音：网页里的歌选「标签页」，后台软件的声音选「整个屏幕」（见下方指引）',
   mic: '用麦克风听环境里的音乐（外放音箱场景）',
   file: '直接上传一小段音频文件识别'
 }
@@ -191,7 +192,12 @@ async function start() {
   let stream
   try {
     stream = mode.value === 'tab'
-      ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      ? await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          // 整屏分享时把「共享系统音频」预勾上（浏览器不支持时忽略此项，不报错）
+          systemAudio: 'include'
+        })
       : await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
         })
@@ -200,10 +206,15 @@ async function start() {
     ElMessage.error(e && e.name === 'NotFoundError' ? '没有可用的音频采集设备' : '无法开始录音：' + (e.message || e))
     return
   }
-  // 共享了画面但没勾音频：识曲无意义，直接引导重选
+  // 共享了画面但没带出音频：识曲无意义，按所选分享面给定向提示后引导重选
   if (stream.getAudioTracks().length === 0) {
+    const surface = stream.getVideoTracks()[0]?.getSettings?.()?.displaySurface  // 先读再停流
     stream.getTracks().forEach((t) => t.stop())
-    ElMessage.warning('未勾选「共享音频」：请重新选择标签页，并勾选左下角「同时共享标签页音频」')
+    ElMessage.warning(
+      surface === 'window'
+        ? '单个窗口拿不到声音（浏览器限制）：识别后台软件请改选「整个屏幕」并勾选系统音频，网页里的歌用标签页最稳'
+        : '这次共享没带出音频：若选了整个屏幕，请勾选「同时也共享系统音频」；找不到该选项说明浏览器版本偏旧，建议用标签页方式'
+    )
     return
   }
   sourceStream = stream
