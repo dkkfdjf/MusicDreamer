@@ -46,4 +46,19 @@ public class AdminUserController {
         AuthContext.requireAdmin();
         return Mess.ok(userService.adminCreate(dto));
     }
+
+    /** bug75：确保同名歌手账号存在（无则拼音用户名 + 初始密码 admin123 自动创建），幂等。 */
+    @PostMapping("/ensure-singer")
+    public Mess ensureSinger(@RequestBody java.util.Map<String, String> body) {
+        AuthContext.requireAdmin();
+        return Mess.ok(userService.ensureSinger(body.get("nickname")));
+    }
+
+    /** bug81：删除用户（软删除，保留历史数据引用；不能删自己与管理员账号）。 */
+    @org.springframework.web.bind.annotation.DeleteMapping("/delete/{id}")
+    public Mess delete(@org.springframework.web.bind.annotation.PathVariable Long id) {
+        AuthContext.requireAdmin();
+        userService.deleteUser(id, AuthContext.requireLogin());
+        return Mess.ok();
+    }
 }

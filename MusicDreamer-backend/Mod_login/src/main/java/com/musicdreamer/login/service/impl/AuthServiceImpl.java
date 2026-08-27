@@ -127,6 +127,10 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() != null && user.getStatus() == 0) {
             throw new BizException(ErrorCode.USER_DISABLED);
         }
+        // bug81：软删除账号（status=2）等同注销，登录直接拒绝
+        if (user.getStatus() != null && user.getStatus() == 2) {
+            throw new BizException(ErrorCode.USER_DISABLED.getCode(), "该账号已注销，请联系管理员");
+        }
         if (activateEnabled && "1".equals(redisGet(KEY_PENDING + user.getId()))) {
             throw new BizException(ErrorCode.EMAIL_NOT_VERIFIED);
         }

@@ -100,6 +100,11 @@ public class AlbumServiceImpl implements AlbumService {
     public Map<String, Object> addSong(Long id, Long songId, Long userId) {
         requireOwnedAlbum(id, userId);
         Map<String, Object> song = songRemoteService.requirePublishedSong(songId);
+        // bug65：专辑只能收录自己的作品——跨歌手把别人的歌拉进自己专辑属于越权
+        Object songOwner = song.get("singerId");
+        if (!(songOwner instanceof Number) || userId.longValue() != ((Number) songOwner).longValue()) {
+            throw new BizException(ErrorCode.NO_PERMISSION, "专辑只能添加自己上传的歌曲");
+        }
 
         Long exists = albumSongMapper.selectCount(new LambdaQueryWrapper<AlbumSong>()
                 .eq(AlbumSong::getAlbumId, id)

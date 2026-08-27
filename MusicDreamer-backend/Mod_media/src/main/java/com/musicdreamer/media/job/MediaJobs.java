@@ -106,6 +106,8 @@ public class MediaJobs {
 
             if (m != null && m.plainLyrics() != null) {
                 tasks.progress(task.getId(), 25, "在线歌词无时间轴，正在用本地识别添加…");
+                // bug64：本地转写可能耗时数分钟，没有中间进度用户会以为卡死
+                tasks.progress(task.getId(), 35, "本地AI预转写中（较长歌曲请耐心等待）…");
                 List<LrcSupport.LrcLine> plain = LrcSupport.parseLrc(m.plainLyrics());
                 List<LrcSupport.LrcLine> wav = transcribeForAlign(task, song);
                 if (wav != null) {

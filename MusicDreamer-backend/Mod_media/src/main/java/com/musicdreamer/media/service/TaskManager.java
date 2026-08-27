@@ -162,6 +162,13 @@ public class TaskManager {
         if (t == null) {
             return;
         }
+        // bug84：已进终态（尤其 CANCELLED）的任务，迟到的收尾/续跑结果不得覆盖——否则取消形同虚设
+        String cur = t.getStatus();
+        if ("SUCCESS".equals(cur) || "FAILED".equals(cur) || "CANCELLED".equals(cur)) {
+            lastProgressAt.remove(taskId);
+            retryAfter.remove(taskId);
+            return;
+        }
         if ("RUNNING".equals(t.getStatus())) {
             Timer.builder("media_task_duration_seconds")
                     .tag("type", t.getTaskType()).register(registry);

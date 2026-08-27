@@ -13,6 +13,7 @@ import com.musicdreamer.login.entity.User;
 import com.musicdreamer.login.mapper.SingerProfileMapper;
 import com.musicdreamer.login.mapper.UserMapper;
 import com.musicdreamer.login.service.UserService;
+import com.musicdreamer.login.util.Pinyins;
 import com.musicdreamer.login.vo.UserBriefVO;
 import com.musicdreamer.login.vo.UserVO;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +75,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public Map<String, Object> pageUsers(long page, long size, String keyword) {
         Page<User> p = new Page<>(Math.max(page, 1), size <= 0 ? 10 : Math.min(size, 100));
-        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>();
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        // bug81：已删除（status=2）的账号不再出现在管理列表
+        wrapper.ne(User::getStatus, 2);
         if (StringUtils.hasText(keyword)) {
             String kw = keyword.trim();
             wrapper.and(w -> w.like(User::getUsername, kw).or().like(User::getNickname, kw));
@@ -105,16 +108,7 @@ public class UserServiceImpl implements UserService {
         // 禁用即吊销该用户全部存量 token（P1-1）：网关按认证地板拒绝旧 token。
         // 启用不清地板——被禁期间签发的 token 恢复后依然无效，需重新登录
         if (dto.getStatus() == 0) {
-            long floor = System.currentTimeMillis();
-            try {
-                String key = KEY_AUTH_FLOOR + dto.getUserId();
-                String cur = redis.opsForValue().get(key);
-                if (cur == null || Long.parseLong(cur.trim()) < floor) {
-                    redis.opsForValue().set(key, String.valueOf(floor));
-                }
-            } catch (Exception e) {
-                log.warn("抬升认证地板失败 userId={}: {}", dto.getUserId(), e.getMessage());
-            }
+            revokeTokens(dto.getUserId());
         }
     }
 
@@ -155,6 +149,83 @@ public class UserServiceImpl implements UserService {
         }
         log.info("管理员创建账号 userId={} username={} role={}", user.getId(), user.getUsername(), dto.getRole());
         return user.getId();
+    }
+
+    @Override
+    public Map<String, Object> ensureSinger(String nickname) {
+        String name = nickname == null ? "" : nickname.trim();
+        if (name.isEmpty() || name.length() > 50) {
+            throw new BizException(ErrorCode.PARAM_OUT_OF_RANGE.getCode(), "歌手名需 1-50 字");
+        }
+        // 同名歌手（或管理员）账号已存在则直接复用，不重复创建
+        User exist = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getNickname, name).in(User::getRole, 1, 2)
+                .orderByAsc(User::getId).last("limit 1"));
+        Map<String, Object> data = new HashMap<>();
+        if (exist != null) {
+            data.put("userId", exist.getId());
+            data.put("username", exist.getUsername());
+            data.put("created", false);
+            return data;
+        }
+        // bug75：用户名 = 歌手名拼音全拼（冲突加序号），初始密码固定 admin123
+        String base = Pinyins.full(name);
+        if (base == null || base.isBlank()) {
+            base = "singer";
+        }
+        if (base.length() > 40) {
+            base = base.substring(0, 40);
+        }
+        String username = base;
+        int i = 1;
+        while (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getUsername, username)) > 0) {
+            username = base + (++i);
+        }
+        AdminCreateUserDTO dto = new AdminCreateUserDTO();
+        dto.setUsername(username);
+        dto.setPassword("admin123");
+        dto.setNickname(name);
+        dto.setRole(1);
+        Long id = adminCreate(dto);
+        log.info("自动创建歌手账号 userId={} username={} nickname={}", id, username, name);
+        data.put("userId", id);
+        data.put("username", username);
+        data.put("created", true);
+        return data;
+    }
+
+    @Override
+    public void deleteUser(Long userId, Long operatorId) {
+        if (userId != null && userId.equals(operatorId)) {
+            throw new BizException(ErrorCode.NO_PERMISSION.getCode(), "不能删除当前登录账号");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (user.getRole() != null && user.getRole() == 2) {
+            throw new BizException(ErrorCode.NO_PERMISSION.getCode(), "管理员账号不支持删除，请先调整为普通用户");
+        }
+        // bug81：软删除——歌曲/评论/收藏等历史数据仍引用 user_id，物理删除会留孤儿；
+        // status=2 的账号登录即拒、管理列表不可见，昵称保留供历史记录展示
+        userMapper.update(null, new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .set(User::getStatus, 2));
+        revokeTokens(userId);
+    }
+
+    /** 吊销用户全部存量 token：抬升认证地板，网关据此拒绝旧 token。 */
+    private void revokeTokens(Long userId) {
+        long floor = System.currentTimeMillis();
+        try {
+            String key = KEY_AUTH_FLOOR + userId;
+            String cur = redis.opsForValue().get(key);
+            if (cur == null || Long.parseLong(cur.trim()) < floor) {
+                redis.opsForValue().set(key, String.valueOf(floor));
+            }
+        } catch (Exception e) {
+            log.warn("抬升认证地板失败 userId={}: {}", userId, e.getMessage());
+        }
     }
 
     @Override

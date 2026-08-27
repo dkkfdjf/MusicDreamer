@@ -65,6 +65,12 @@
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-crypto</artifactId>
     </dependency>
+    <!-- bug75：管理员新建歌手账号时，用户名由歌手名中文自动转拼音全拼 -->
+    <dependency>
+      <groupId>com.belerweb</groupId>
+      <artifactId>pinyin4j</artifactId>
+      <version>2.5.1</version>
+    </dependency>
   </dependencies>
 
   <build>

@@ -85,7 +85,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
         boolean wantLyrics = url.contains("mdlyric=1");
         String style = extractStyle(url);
         String customTitle = extractMarker(url, "mtitle"); // bug16：用户自定义歌名
-        String cleanUrl = url.replaceAll("[?&](wantSubtitle=1|mdlyric=1|reqid=\\d+|style=[^&#]*|mtitle=[^&#]*)", "");
+        Long sgid = extractSgid(url); // bug80：求歌入库时归属到同名歌手账号
+        String cleanUrl = url.replaceAll("[?&](wantSubtitle=1|mdlyric=1|reqid=\\d+|sgid=\\d+|style=[^&#]*|mtitle=[^&#]*)", "");
         Path taskDir = storage.dir("task");
         String ytdlp = tools.locate(ToolsLocator.YT_DLP);
         String ffmpeg = tools.locate(ToolsLocator.FFMPEG);
@@ -154,7 +155,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
             tasks.progress(task.getId(), 80, "正在写入歌曲库…");
             Map<String, Object> song = new HashMap<>();
             song.put("name", title);
-            song.put("singerId", task.getOperator());
+            // bug80：求歌入库带 sgid 标记时归属到同名歌手，否则归操作者（管理员/上传歌手本人）
+            song.put("singerId", sgid != null ? sgid : task.getOperator());
             song.put("duration", duration);
             if (style != null && !style.isBlank()) {
                 song.put("style", style);
@@ -237,7 +239,8 @@ public class DownloadJob implements TaskManager.TaskRunner {
         }
     }
 
-    private JsonNode dumpJson(String ytdlp, String url) throws Exception {
+    /** 元数据解析（412 风控重试一次）；供下载主流程与导入预览（bug74）共用。 */
+    public JsonNode dumpJson(String ytdlp, String url) throws Exception {
         for (int i = 0; i < 2; i++) {
             List<String> cmd = new ArrayList<>(List.of(ytdlp, "--dump-single-json", "--no-playlist"));
             cmd.addAll(netArgs.build(url));
@@ -258,6 +261,16 @@ public class DownloadJob implements TaskManager.TaskRunner {
         return extractMarker(url, "style");
     }
 
+    /** bug80：从 URL 标记里取归属歌手 id（控制器写入 sgid=<userId>）。 */
+    private static Long extractSgid(String url) {
+        Matcher m = Pattern.compile("[?&]sgid=(\\d+)").matcher(url);
+        try {
+            return m.find() ? Long.parseLong(m.group(1)) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** 从 URL 标记里取任意参数值（URL 编码写入，容错解码）。 */
     private static String extractMarker(String url, String name) {
         Matcher m = Pattern.compile("[?&]" + name + "=([^&#]+)").matcher(url);
@@ -273,8 +286,10 @@ public class DownloadJob implements TaskManager.TaskRunner {
 
     /** 歌名智能裁剪（bug9）：B 站视频标题常带"【4K修复】xxx 无损音质"等修饰，
      *  直接入库会又长又难看。规则：取《》里的歌名；否则去掉【】修饰与站点后缀；
-     *  空白收敛；40 字封顶；裁空回落原标题。 */
-    static String smartTitle(String raw) {
+     *  空白收敛；40 字封顶；裁空回落原标题。
+     *  bug74：再加一道"散落修饰词"过滤——括号之外的 完整版/官方/MV/4K/无损 等
+     *  独立词元也去掉（只删整词匹配，不会误伤正常歌名）。 */
+    public static String smartTitle(String raw) {
         if (raw == null || raw.isBlank()) {
             return raw;
         }
@@ -290,7 +305,11 @@ public class DownloadJob implements TaskManager.TaskRunner {
         t = t.replaceAll("(?i)[_\\s|-]*bilibili.*$", "")
                 .replaceAll("[｜|]\\s*哔哩哔哩.*$", "")
                 .replaceAll("[_\\s|-]*哔哩哔哩.*$", "");
-        // 4) 空白收敛、去首尾连接符
+        // 4) bug74：散落修饰词整词过滤（按分隔符切词，只删完全匹配的噪声词）
+        t = java.util.Arrays.stream(t.split("[\\s/｜|·,，、\\-－—]+"))
+                .filter(tok -> !NOISE_TOKEN.matcher(tok).matches())
+                .collect(java.util.stream.Collectors.joining(" "));
+        // 5) 空白收敛、去首尾连接符
         t = t.replaceAll("\\s+", " ").trim()
                 .replaceAll("^[\\s\\-－—_·.]+|[\\s\\-－—_·.]+$", "");
         if (t.isEmpty()) {
@@ -298,6 +317,12 @@ public class DownloadJob implements TaskManager.TaskRunner {
         }
         return t.length() > 40 ? t.substring(0, 40) : t;
     }
+
+    /** bug74：作为独立词元出现的修饰词（整词匹配才删）：画质/音质/版本/官方标记等。 */
+    private static final Pattern NOISE_TOKEN = Pattern.compile(
+            "(?i)(mv|pv|av|official\\s*video|official|music\\s*video|lyrics?\\s*video|lyrics?"
+                    + "|audio|audio\\s*only|纯音乐|纯享版?|完整版?|正式版|官方|高清|无损|母带|hi-?res|杜比全景声|杜比"
+                    + "|4k|2k|1080p|720p|60帧|修复版?|重制版?|remaster(ed)?|restored|超清|蓝光|音质|视频|试听|伴奏|cover|live)");
 
     /** 错误转译表（设计 10.5，原始 stderr 绝不给用户）。 */
     private String translate(String raw) {

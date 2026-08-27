@@ -1,5 +1,6 @@
 package com.musicdreamer.media.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.musicdreamer.common.api.ErrorCode;
 import com.musicdreamer.common.api.Mess;
 import com.musicdreamer.common.auth.AuthContext;
@@ -38,6 +39,8 @@ public class MediaController {
     private final StorageService storage;
     private final ToolsLocator tools;
     private final ProcessExecutor executor;
+    private final com.musicdreamer.media.job.DownloadJob downloadJob;
+    private final com.fasterxml.jackson.databind.ObjectMapper json = new ObjectMapper();
 
     @Data
     public static class DownloadDTO {
@@ -86,6 +89,38 @@ public class MediaController {
         data.put("taskId", t.getId());
         data.put("estimatedTime", "1-5 分钟");
         return Mess.ok(data);
+    }
+
+    /** 导入预览（bug74）：解析链接元数据并给出智能裁剪后的歌名——歌手提交前就知道
+     *  这首歌会被裁成什么名字、多长，不用等下载和审核之后才发现。 */
+    @GetMapping("/import/preview")
+    public Mess importPreview(@RequestParam String url) {
+        AuthContext.requireUploader();
+        String u = extractUrl(url);
+        if (!SUPPORTED.matcher(u).find()) {
+            throw new BizException(ErrorCode.FILE_TYPE_UNSUPPORTED.getCode(), "不支持的链接");
+        }
+        String ytdlp = tools.locate(ToolsLocator.YT_DLP);
+        if (ytdlp == null) {
+            throw new BizException(5003, "yt-dlp 未安装，请先在管理后台安装媒体工具");
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode meta = downloadJob.dumpJson(ytdlp, u);
+            if (meta == null) {
+                throw new BizException(5003, "解析失败：请检查链接是否有效（或稍后重试）");
+            }
+            String raw = meta.path("title").asText("");
+            Map<String, Object> data = new HashMap<>();
+            data.put("rawTitle", raw);
+            data.put("title", com.musicdreamer.media.job.DownloadJob.smartTitle(raw));
+            data.put("duration", meta.path("duration").asLong(0));
+            data.put("uploader", meta.path("uploader").asText(""));
+            return Mess.ok(data);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(5003, "解析失败：" + e.getMessage());
+        }
     }
 
     /** 从粘贴文本提取链接：B 站分享文案是“标题 链接 备注”，定位 http/www 起始截取，去尾部标点。 */

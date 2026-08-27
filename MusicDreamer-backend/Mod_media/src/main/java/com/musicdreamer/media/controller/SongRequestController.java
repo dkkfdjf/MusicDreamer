@@ -9,6 +9,7 @@ import com.musicdreamer.media.entity.MediaTask;
 import com.musicdreamer.media.entity.SongRequest;
 import com.musicdreamer.media.exec.ExecResult;
 import com.musicdreamer.media.exec.ProcessExecutor;
+import com.musicdreamer.media.mapper.CrossReadMapper;
 import com.musicdreamer.media.mapper.SongRequestMapper;
 import com.musicdreamer.media.service.NetArgs;
 import com.musicdreamer.media.service.TaskManager;
@@ -44,6 +45,7 @@ public class SongRequestController {
     private final ToolsLocator tools;
     private final ProcessExecutor executor;
     private final NetArgs netArgs;
+    private final CrossReadMapper crossRead;
     private final ObjectMapper json = new ObjectMapper();
 
     // ---------- 用户侧 ----------
@@ -145,6 +147,8 @@ public class SongRequestController {
     /**
      * 求歌入库：候选视频 URL → 下载任务。source_url 追加 reqid 标记，
      * DownloadJob 成功入库后据此自动回填申请状态（沿用 wantSubtitle 的 URL 标记约定）。
+     * bug85：本地曲库已有同名已发布歌曲时直接完成求歌，不再下载；
+     * bug80：填了歌手的求歌，入库归属到同名歌手账号（没有则提示前端可一键创建）。
      */
     @PostMapping("/requests/{id}/download")
     public Mess download(@PathVariable Long id, @RequestBody RequestDTO dto) {
@@ -160,10 +164,42 @@ public class SongRequestController {
         if (url == null || !BILI_URL.matcher(url).find()) {
             return Mess.fail(5003, "不支持的链接，请从候选列表选择");
         }
+        // bug85：本地命中——直接关联已有歌曲并完成申请
+        if (r.getTitle() != null && !r.getTitle().isBlank()) {
+            Map<String, Object> local = crossRead.findPublishedSongByName(r.getTitle().trim());
+            if (local != null && local.get("id") instanceof Number n) {
+                r.setStatus(1);
+                r.setResultSongId(n.longValue());
+                r.setHandledBy(AuthContext.getUserId());
+                r.setHandledAt(LocalDateTime.now());
+                requests.updateById(r);
+                return Mess.ok(Map.of("localSongId", n.longValue()));
+            }
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (r.getArtist() != null && !r.getArtist().isBlank()) {
+            Long sgid = crossRead.findSingerIdByNickname(r.getArtist().trim());
+            if (sgid != null) {
+                url += (url.contains("?") ? "&" : "?") + "sgid=" + sgid;
+            } else {
+                // 歌手账号不存在：不建任务，让前端引导管理员一键创建后重试
+                data.put("missingSinger", r.getArtist().trim());
+                return Mess.ok(data);
+            }
+        }
         url += (url.contains("?") ? "&" : "?") + "reqid=" + id;
         MediaTask t = tasks.submit(TaskManager.DOWNLOAD, url, null,
                 AuthContext.getUserId(), "排队中…");
-        return Mess.ok(Map.of("taskId", t.getId()));
+        data.put("taskId", t.getId());
+        return Mess.ok(data);
+    }
+
+    /** bug80：删除求歌记录（管理员清理误提/测试记录；已处理的历史记录同样可清）。 */
+    @org.springframework.web.bind.annotation.DeleteMapping("/requests/{id}")
+    public Mess remove(@PathVariable Long id) {
+        AuthContext.requireAdmin();
+        requests.deleteById(id);
+        return Mess.ok(null);
     }
 
     /**
@@ -212,7 +248,10 @@ public class SongRequestController {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("url", url);
                     item.put("title", title);
-                    item.put("duration", e.path("duration").asDouble(0));
+                    double dur = e.path("duration").asDouble(0);
+                    item.put("duration", dur);
+                    // bug85：超长视频大概率是合集/串烧（不是一首歌），标出来让管理员避开
+                    item.put("tooLong", dur > 600);
                     item.put("uploader", e.path("uploader").asText(""));
                     item.put("cover", firstNonBlank(
                             e.path("thumbnail").asText(null),

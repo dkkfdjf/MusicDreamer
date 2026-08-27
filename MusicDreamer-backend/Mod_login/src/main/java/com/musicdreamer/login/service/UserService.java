@@ -26,6 +26,12 @@ public interface UserService {
     /** 管理端直接创建账号（跳过邮件激活；歌手角色直接认证通过并补 singer_profile）。返回新用户 ID。 */
     Long adminCreate(AdminCreateUserDTO dto);
 
+    /** bug75：确保同名歌手账号存在（无则拼音用户名 + 默认密码 admin123 创建），幂等。 */
+    Map<String, Object> ensureSinger(String nickname);
+
+    /** bug81：删除用户（软删除 status=2，保留歌曲/评论等历史引用；吊销存量 token）。 */
+    void deleteUser(Long userId, Long operatorId);
+
     /** 内部调用：用户简要信息。 */
     UserBriefVO brief(Long userId);
 }
