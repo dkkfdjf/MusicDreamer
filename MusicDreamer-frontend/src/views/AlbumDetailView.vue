@@ -43,8 +43,8 @@
       <button class="btn btn-primary" @click="loadError ? load() : $router.push('/songs')">去广场逛逛</button>
     </div>
 
-    <!-- 主人添加歌曲：从全站曲库挑选 -->
-    <el-dialog v-model="addVisible" title="添加歌曲到专辑" width="480px">
+    <!-- 主人添加歌曲：bug65——只能从自己的歌曲里挑选 -->
+    <el-dialog v-model="addVisible" title="添加歌曲到专辑（仅自己上传的歌）" width="480px">
       <el-input v-model="pickKeyword" placeholder="搜索歌名 / 歌手" clearable style="margin-bottom: 10px" />
       <div class="pick-list">
         <div v-for="s in pickSongs" :key="s.id" class="pick-row">
@@ -68,7 +68,7 @@ import api from '../api'
 import { useUserStore } from '../stores/user'
 import { usePlayerStore } from '../stores/player'
 import SongGrid from '../components/SongGrid.vue'
-import { resolveFileUrl, singerName, pageOf, playlistSongs } from '../utils'
+import { resolveFileUrl, singerName, listOf, playlistSongs } from '../utils'
 import GenCover from '../components/GenCover.vue'
 import { coverTint } from '../utils/color'
 
@@ -133,12 +133,13 @@ async function removeSong(row) {
   load()
 }
 
-/* 添加歌曲弹窗：搜索全站歌曲 */
+/* 添加歌曲弹窗：bug65——专辑只能收录自己的歌，主人视角从"我的歌曲"里挑，不再全站搜索 */
 const addVisible = ref(false)
 const pickKeyword = ref('')
 const pickSongs = ref([])
 const pickLoading = ref(false)
 let pickTimer = null
+let pickAll = []
 
 watch(addVisible, (open) => {
   if (open) loadPick()
@@ -151,13 +152,19 @@ watch(pickKeyword, () => {
 async function loadPick() {
   pickLoading.value = true
   try {
-    const data = pickKeyword.value
-      ? await api.searchSongs({ keyword: pickKeyword.value, page: 1, size: 30 })
-      : await api.searchByStyle({ page: 1, size: 30 })
-    pickSongs.value = pageOf(data).list
+    // 一次拉全自己的歌（含审核中），本地过滤：只有已发布的能进专辑（后端同口径兜底）
+    const mine = listOf(await api.songMine({ page: 1, size: 200 }))
+    pickAll = mine.filter((s) => s.status === undefined || s.status === 2)
+    applyPickFilter()
   } finally {
     pickLoading.value = false
   }
+}
+
+function applyPickFilter() {
+  const kw = pickKeyword.value.trim().toLowerCase()
+  pickSongs.value = !kw ? pickAll : pickAll.filter((s) =>
+    (s.name || '').toLowerCase().includes(kw) || (singerName(s) || '').toLowerCase().includes(kw))
 }
 
 async function addSong(s) {

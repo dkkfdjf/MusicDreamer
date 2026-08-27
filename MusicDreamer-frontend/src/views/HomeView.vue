@@ -113,7 +113,9 @@
           </svg>
         </div>
         <h3>{{ userStore.isLogin ? '还没有内容' : '登录后效果更佳' }}</h3>
-        <p>听歌、收藏、创建歌单，或成为歌手发布你的作品</p>
+        <!-- bug73：联合筛选下，当前板块+曲风可能组合出空集——给出解法而不是干瞪眼 -->
+        <p v-if="style">「{{ currentTabLabel }} + {{ style }}」下暂时没有歌曲，试试放宽曲风</p>
+        <p v-else>听歌、收藏、创建歌单，或成为歌手发布你的作品</p>
         <div class="empty-slogan">♪ 悦享音乐，让每一首歌都被听见 ♪</div>
         <div class="empty-actions">
           <button v-if="!userStore.isLogin" class="btn btn-primary" @click="$router.push('/login')">登录</button>
@@ -224,7 +226,10 @@ const SPEC_COLORS = Array.from({ length: SPEC_BARS }, (_, i) => {
 
 function drawSpectrum() {
   specRaf = 0
+  // bug86 自愈：切页回来/组件重建后分析器可能为空，播放中随帧补挂
+  if (playerStore.playing && !specAnalyser) specAnalyser = getAnalyser(getAudioEl())
   const c = spectrumEl.value
+  let alive = false
   if (c) {
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     const w = c.clientWidth
@@ -242,7 +247,6 @@ function drawSpectrum() {
       // 宽度瞬变期（歌词栏开合挤压）算出的 bw 可为负：钳到 1 防止
       // roundRect 收负半径抛 RangeError 打死 rAF 循环
       const bw = Math.max(1, (w - gap * (SPEC_BARS - 1)) / SPEC_BARS)
-      let alive = false
       for (let i = 0; i < SPEC_BARS; i++) {
         const t = i / (SPEC_BARS - 1)
         const bin = Math.min(127, Math.round(2 + Math.pow(t, 1.6) * 92))
@@ -259,9 +263,11 @@ function drawSpectrum() {
         g.fill()
       }
       g.globalAlpha = 1
-      if (playerStore.playing || alive) specRaf = requestAnimationFrame(drawSpectrum)
     }
   }
+  // bug86：续帧不再依赖画布当帧存在——画布短暂缺席（路由切换/列表重渲染）后回来，
+  // 循环仍在，动效自恢复；此前续帧嵌在 if(w&&h) 里，画布消失一帧循环就永久死亡
+  if ((playerStore.playing || alive) && !prefersReduced) specRaf = requestAnimationFrame(drawSpectrum)
 }
 
 watch(echoOn, (on) => {
@@ -292,16 +298,20 @@ function openEdit(row) {
 // preview-v2：板块标题固定「热门歌曲」，分类状态由上方 chips 表达
 const currentTitle = '热门歌曲'
 
+const currentTabLabel = computed(() => {
+  const t = tabs.find((x) => x.key === tab.value)
+  return t ? t.label : '推荐'
+})
+
+/* bug73：两列分类改为联合筛选——板块（推荐/热歌/飙升）与曲风相互独立、同时生效。
+   此前点曲风会把板块顶掉（tab 被改成 style），点板块又清空曲风，只能二选一。 */
 function switchTab(key) {
   tab.value = key
-  // 榜单/推荐是全站口径，切回时清空曲风筛选
-  style.value = ''
   loadTab()
 }
 
 function selectStyle(item) {
   style.value = item
-  tab.value = 'style'
   loadTab()
 }
 
@@ -321,22 +331,25 @@ async function addToPlaylist(pid, songId) {
 async function loadTab() {
   loading.value = true
   try {
-    if (tab.value === 'style') {
-      // 曲风筛选：沿用分类浏览接口（按播放数倒序）
-      songs.value = listOf(await api.searchByStyle({ style: style.value || undefined, page: 1, size: 20 }))
-    } else if (tab.value === 'reco') {
+    // bug73：曲风作为独立筛选叠加在当前板块上（多取一些再过滤，保证过滤后仍有余量）
+    let list = []
+    if (tab.value === 'reco') {
       let reco = []
       if (userStore.isLogin) {
         try {
-          reco = listOf(await api.recommendList(20))
+          reco = listOf(await api.recommendList(60))
         } catch (e) {
           reco = [] // 推荐服务异常时降级热歌榜
         }
       }
-      songs.value = reco.length ? reco : listOf(await api.songChart({ type: 'hot', limit: 20 }))
+      list = reco.length ? reco : listOf(await api.songChart({ type: 'hot', limit: 60 }))
     } else {
-      songs.value = listOf(await api.songChart({ type: tab.value, limit: 20 }))
+      list = listOf(await api.songChart({ type: tab.value, limit: 60 }))
     }
+    if (style.value) {
+      list = list.filter((s) => s.style === style.value)
+    }
+    songs.value = list.slice(0, 20)
   } finally {
     loading.value = false
   }

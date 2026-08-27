@@ -51,13 +51,21 @@
               <el-tag :type="(SONG_STATUS[row.status] || {}).type">{{ (SONG_STATUS[row.status] || {}).label }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="400" align="center">
+          <!-- bug63：操作收敛为「编辑/歌词 + 更多下拉」，低频操作收进菜单，列宽从 400 收窄 -->
+          <el-table-column label="操作" width="240" align="center">
             <template #default="{ row }">
               <el-button @click="edit(row)">编辑</el-button>
               <el-button type="primary" plain @click="lyric(row)">歌词</el-button>
-              <el-button v-if="row.status === 2" type="danger" plain @click="takedown(row)">下架</el-button>
-              <el-button v-if="row.status === 0" type="success" plain @click="relist(row)">重新上架</el-button>
-              <el-button type="danger" @click="del(row)">删除</el-button>
+              <el-dropdown trigger="click" style="margin-left: 12px" @command="(c) => songCmd(c, row)">
+                <el-button>更多 ▾</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="row.status === 2" command="takedown">下架</el-dropdown-item>
+                    <el-dropdown-item v-if="row.status === 0" command="relist">重新上架</el-dropdown-item>
+                    <el-dropdown-item command="del" divided>删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </template>
           </el-table-column>
         </el-table>
@@ -69,8 +77,9 @@
         </div>
         <el-table :data="users" v-loading="loading">
           <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="username" label="用户名" width="150" />
-          <el-table-column prop="nickname" label="昵称" width="150" />
+          <!-- bug62：用户名/昵称改 min-width，表格自动铺满整页，不再右侧留大段空白 -->
+          <el-table-column prop="username" label="用户名" min-width="160" />
+          <el-table-column prop="nickname" label="昵称" min-width="160" />
           <el-table-column label="角色" width="110">
             <template #default="{ row }">{{ roleLabel(row.role) }}</template>
           </el-table-column>
@@ -79,11 +88,20 @@
               <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '正常' : '禁用' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="130" align="center">
+          <el-table-column label="操作" width="170" align="center">
             <template #default="{ row }">
               <el-button :type="row.status === 1 ? 'danger' : 'success'" plain @click="toggleUser(row)">
                 {{ row.status === 1 ? '禁用' : '启用' }}
               </el-button>
+              <!-- bug81：删除用户（软删除，历史数据保留）收进「更多」 -->
+              <el-dropdown trigger="click" style="margin-left: 12px" @command="(c) => userCmd(c, row)">
+                <el-button>更多 ▾</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="del">删除用户</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </template>
           </el-table-column>
         </el-table>
@@ -92,8 +110,9 @@
       <el-tab-pane label="歌手认证" name="singers">
         <el-table :data="applications" v-loading="loading">
           <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="username" label="申请人" width="140" />
-          <el-table-column prop="realName" label="真实姓名" width="130" />
+          <!-- bug62：申请人/真实姓名改 min-width，表格铺满整页 -->
+          <el-table-column prop="username" label="申请人" min-width="150" />
+          <el-table-column prop="realName" label="真实姓名" min-width="150" />
           <el-table-column prop="createTime" label="申请时间" width="170">
             <template #default="{ row }">{{ fmtTime(row.createTime) }}</template>
           </el-table-column>
@@ -117,13 +136,20 @@
             <template #default="{ row }">{{ reasonLabel(row.reason) }}</template>
           </el-table-column>
           <el-table-column prop="description" label="描述" min-width="200" />
-          <el-table-column label="操作" width="340" align="center">
+          <!-- bug63：举报操作收敛为「标记处理 + 更多下拉」，列宽从 340 收窄 -->
+          <el-table-column label="操作" width="210" align="center">
             <template #default="{ row }">
               <template v-if="row.status === 1">
                 <el-button type="success" @click="handleReport(row, true)">标记处理</el-button>
-                <el-button v-if="row.targetType === 1" type="danger" plain
-                  @click="handleReport(row, true, 'takedown')">下架歌曲</el-button>
-                <el-button plain @click="handleReport(row, false)">驳回</el-button>
+                <el-dropdown trigger="click" style="margin-left: 12px" @command="(c) => reportCmd(c, row)">
+                  <el-button>更多 ▾</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="row.targetType === 1" command="takedown">下架歌曲并处理</el-dropdown-item>
+                      <el-dropdown-item command="reject">驳回</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </template>
               <el-tag v-else size="small">{{ row.status === 2 ? '已处理' : '已驳回' }}</el-tag>
             </template>
@@ -161,11 +187,16 @@
               <template v-if="row.status === 0">
                 <el-button type="primary" @click="openReqSearch(row)">搜索入库</el-button>
                 <el-button type="danger" plain @click="rejectRequest(row)">拒绝</el-button>
+                <!-- bug80：误提/测试记录可删 -->
+                <el-button link type="info" @click="removeRequest(row)">删除</el-button>
               </template>
-              <span v-else-if="row.status === 1" class="req-done">歌曲 #{{ row.resultSongId }}</span>
-              <el-tooltip v-else :content="row.rejectReason || '未填理由'" placement="top">
-                <span class="req-done">{{ row.rejectReason || '已拒绝' }}</span>
-              </el-tooltip>
+              <template v-else>
+                <span v-if="row.status === 1" class="req-done">歌曲 #{{ row.resultSongId }}</span>
+                <el-tooltip v-else :content="row.rejectReason || '未填理由'" placement="top">
+                  <span class="req-done">{{ row.rejectReason || '已拒绝' }}</span>
+                </el-tooltip>
+                <el-button link type="info" style="margin-left: 8px" @click="removeRequest(row)">删除记录</el-button>
+              </template>
             </template>
           </el-table-column>
         </el-table>
@@ -270,7 +301,9 @@
         <el-input v-model="reqKw" placeholder="歌名 歌手" clearable @keyup.enter="doReqSearch" />
         <el-button type="primary" :loading="reqSearching" @click="doReqSearch">搜索</el-button>
       </div>
-      <div class="req-tip">B 站搜索前 5 条；优先选时长完整、官方/同名音频</div>
+      <div class="req-tip">
+        B 站搜索前 5 条；优先选时长完整、官方/同名音频，<b>红色超长条目疑似合集/串烧，慎选</b>
+      </div>
       <div v-loading="reqSearching" class="req-cands">
         <div v-for="c in reqCandidates" :key="c.url" class="req-card" @click="pickCandidate(c)">
           <img v-if="c.cover" class="req-cover" :src="c.cover" loading="lazy"
@@ -279,7 +312,10 @@
           <div class="req-info">
             <div class="req-c-title">{{ c.title }}</div>
             <div class="req-c-meta">
-              <span v-if="c.duration">{{ fmtDuration(c.duration) }}</span>
+              <!-- bug85：超长视频大概率不是单首歌，标红提示 -->
+              <span v-if="c.duration" :class="{ 'too-long': c.tooLong }">
+                {{ fmtDuration(c.duration) }}<template v-if="c.tooLong"> · 疑似合集</template>
+              </span>
               <span>{{ c.uploader || '未知UP' }}</span>
             </div>
           </div>
@@ -516,7 +552,36 @@ async function pickCandidate(c) {
     return
   }
   try {
-    const data = await api.requestDownload(reqCurrent.value.id, c.url)
+    let data = await api.requestDownload(reqCurrent.value.id, c.url)
+    // bug85：本地曲库已有同名已发布歌曲——后端直接完成求歌，不下载
+    if (data && data.localSongId) {
+      message.success(`本地曲库已有同名歌曲（#${data.localSongId}），已直接完成该求歌`)
+      reqDrawer.value = false
+      load()
+      return
+    }
+    // bug80：求歌填了歌手但账号不存在——引导一键创建（拼音用户名/admin123）后重试
+    if (data && data.missingSinger && !data.taskId) {
+      let ok = false
+      try {
+        await confirm(
+          `歌手「${data.missingSinger}」还没有账号。是否自动创建（拼音用户名，初始密码 admin123）并把这首歌归属给 TA？`,
+          { title: '创建歌手账号', okText: '创建并继续' }
+        )
+        ok = true
+      } catch (e) {
+        // 取消则不下载，保留求歌待处理
+      }
+      if (!ok) return
+      await api.ensureSinger(data.missingSinger)
+      data = await api.requestDownload(reqCurrent.value.id, c.url)
+      if (data && data.localSongId) {
+        message.success(`本地曲库已有同名歌曲（#${data.localSongId}），已直接完成该求歌`)
+        reqDrawer.value = false
+        load()
+        return
+      }
+    }
     taskStore.track(data.taskId, 'DOWNLOAD')
     message.success('已开始下载，完成后求歌状态自动回填')
     reqDrawer.value = false
@@ -588,9 +653,47 @@ async function del(row) {
   load()
 }
 
+// bug63：全量歌曲「更多」下拉的分发器
+function songCmd(cmd, row) {
+  if (cmd === 'takedown') takedown(row)
+  else if (cmd === 'relist') relist(row)
+  else if (cmd === 'del') del(row)
+}
+
 async function toggleUser(row) {
   await api.setUserStatus({ userId: row.id, status: row.status === 1 ? 0 : 1 })
   message.success('已更新')
+  load()
+}
+
+/* bug81：删除用户（后端软删除，保留其歌曲/评论等历史数据） */
+function userCmd(cmd, row) {
+  if (cmd === 'del') delUser(row)
+}
+
+async function delUser(row) {
+  try {
+    await confirm(
+      `删除用户「${row.nickname || row.username}」？账号将被注销：无法登录、从列表消失，但其歌曲/评论等历史数据保留。`,
+      { title: '删除用户' }
+    )
+  } catch (e) {
+    return
+  }
+  await api.userDelete(row.id)
+  message.success('已删除')
+  load()
+}
+
+/* bug80：管理员删除求歌记录（误提/测试清理） */
+async function removeRequest(row) {
+  try {
+    await confirm(`删除求歌记录《${row.title}》？该操作不可恢复。`, { title: '删除求歌记录' })
+  } catch (e) {
+    return
+  }
+  await api.requestDelete(row.id)
+  message.success('已删除')
   load()
 }
 
@@ -643,6 +746,12 @@ async function handleReport(row, pass, action) {
   await api.reportHandle({ id: row.id, pass, action: action || '', handleResult: action === 'takedown' ? '核实违规，已下架' : '' })
   message.success('已处理')
   load()
+}
+
+// bug63：举报「更多」下拉的分发器
+function reportCmd(cmd, row) {
+  if (cmd === 'takedown') handleReport(row, true, 'takedown')
+  else if (cmd === 'reject') handleReport(row, false)
 }
 
 // 工具/模型安装进度：提交任务后轮询到结束，按钮上直接显示阶段
@@ -799,4 +908,6 @@ onMounted(load)
   -webkit-box-orient: vertical;
 }
 .req-c-meta { display: flex; gap: 12px; font-size: 12px; color: var(--text-muted, #8a8378); }
+/* bug85：超长候选（>10 分钟，疑似合集）标红警示 */
+.too-long { color: var(--error, #f56c6c); font-weight: 600; }
 </style>

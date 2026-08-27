@@ -43,7 +43,13 @@ function play(index) {
 onMounted(async () => {
   loading.value = true
   try {
-    songs.value = listOf(await api.recentPlays(50))
+    // bug77：recent 接口字段是 songId/singer——映射成 SongGrid/播放器消费的 id/singerName，
+    // 否则 id 为 undefined → 播放报错、封面主色取不到（卡片底色不同步）
+    songs.value = listOf(await api.recentPlays(50)).map((r) => ({
+      ...r,
+      id: r.songId,
+      singerName: r.singer || ''
+    }))
     // 播放明细接口自带累计总数（播完一次记一条），失败静默
     try {
       const h = await api.playHistory({ page: 1, size: 1 })

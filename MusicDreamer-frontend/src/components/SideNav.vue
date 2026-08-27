@@ -100,7 +100,13 @@
         </router-link>
         <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }"
           title="修改昵称、密码与账号资料">
-          <span class="nav-icon">⚙️</span>
+          <span class="nav-icon">
+            <!-- bug59：与其他导航项统一为线性 SVG 图标，替换 emoji ⚙️（各平台渲染不一致） -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
           <span class="nav-text">个人设置</span>
         </router-link>
       </template>

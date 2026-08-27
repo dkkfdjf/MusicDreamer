@@ -1047,3 +1047,13 @@ select {
     padding-inline: 12px !important;
   }
 }
+
+/* bug72：weui 确认框（退出登录等）点击后残留浏览器默认聚焦框。
+   鼠标点击时去掉，键盘 Tab 聚焦仍保留高亮，不牺牲可达性 */
+.weui-dialog__btn:focus {
+  outline: none;
+}
+.weui-dialog__btn:focus-visible {
+  outline: 2px solid var(--accent, #ff6b1a);
+  outline-offset: -2px;
+}

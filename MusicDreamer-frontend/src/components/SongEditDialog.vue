@@ -4,20 +4,16 @@
     <el-form :model="form" label-width="80px">
       <el-form-item label="歌名"><el-input v-model="form.name" /></el-form-item>
       <el-form-item v-if="isAdmin" label="歌手名">
-        <el-select v-model="form.singerName" filterable remote clearable :remote-method="searchSingerOpts"
+        <el-select v-model="form.singerName" filterable remote clearable autocomplete="off"
+          :remote-method="searchSingerOpts"
           :loading="singerLoading" placeholder="搜索并选择已有歌手（清空则用账号昵称）" style="width:100%">
           <el-option v-for="sg in singerOpts" :key="sg.id" :label="sg.nickname" :value="sg.nickname" />
         </el-select>
       </el-form-item>
-      <el-form-item label="专辑"><el-input v-model="form.album" /></el-form-item>
+      <!-- bug67：专辑不再在歌曲编辑里维护（由专辑页统一管理）；bug68：语言维度下线 -->
       <el-form-item label="风格">
         <el-select v-model="form.style" style="width:180px">
           <el-option v-for="s in STYLES" :key="s" :label="s" :value="s" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="语言">
-        <el-select v-model="form.language" style="width:180px">
-          <el-option v-for="l in LANGUAGES" :key="l" :label="l" :value="l" />
         </el-select>
       </el-form-item>
     </el-form>
@@ -33,7 +29,7 @@
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
-import { STYLES, LANGUAGES, listOf } from '../utils'
+import { STYLES, listOf } from '../utils'
 import { useUserStore } from '../stores/user'
 
 const props = defineProps({
@@ -44,7 +40,7 @@ const emit = defineEmits(['update:modelValue', 'saved'])
 
 const userStore = useUserStore()
 const isAdmin = userStore.role === 2
-const form = ref({ name: '', album: '', style: '', language: '', singerName: '' })
+const form = ref({ name: '', style: '', singerName: '' })
 const saving = ref(false)
 
 /* bug21：歌手名只能从已有歌手里选（远程搜索），防手滑改出重名歌手 */
@@ -74,9 +70,7 @@ watch(
     // 列表卡片不一定带全字段，以详情为准；详情字段为空时回退列表值（bug11：不再整单覆盖）
     form.value = {
       name: props.song.name || '',
-      album: props.song.album || '',
       style: props.song.style || '',
-      language: props.song.language || '',
       singerName: props.song.singerName || ''
     }
     try {
@@ -84,9 +78,7 @@ watch(
       if (d) {
         form.value = {
           name: d.name || form.value.name,
-          album: d.album || form.value.album,
           style: d.style || form.value.style,
-          language: d.language || form.value.language,
           singerName: d.singerName || form.value.singerName
         }
       }

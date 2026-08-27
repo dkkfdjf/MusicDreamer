@@ -6,11 +6,18 @@
       <div class="rec-modes">
         <div v-for="m in MODES" :key="m.key" class="rec-mode" :class="{ on: mode === m.key }"
           @click="mode = m.key">
-          <span class="rec-mode-icon">{{ m.icon }}</span>
+          <!-- bug60：模式图标统一为线性 SVG，替换 emoji（各平台渲染大小、风格不一致） -->
+          <span class="rec-mode-icon" v-html="m.icon"></span>
           <span>{{ m.label }}</span>
         </div>
       </div>
       <div class="rec-desc">{{ MODE_DESC[mode] }}</div>
+      <!-- bug61：勾选共享音频是最常见的失败点，系统声音模式给出分步指引 -->
+      <div v-if="mode === 'tab'" class="rec-steps">
+        <span>① 弹出选择框后，切到「标签页」一栏</span>
+        <span>② 选中正在播放音乐的标签页</span>
+        <span>③ 勾选左下角「同时共享标签页音频」，再点「共享」</span>
+      </div>
       <div v-if="mode !== 'file'" class="rec-act">
         <el-button type="danger" round size="large" class="rec-start" @click="start">● 开始识曲</el-button>
         <div class="rec-file-tip">持续聆听、识别到自动停止（最长约 30 秒）</div>
@@ -68,7 +75,11 @@
       <template v-else>
         <template v-if="result.external">
           <div class="rec-miss">
-            <div class="rec-miss-icon">🔎</div>
+            <div class="rec-miss-icon">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
             <div class="rec-miss-title">这好像是《{{ result.external.title }}》</div>
             <div class="rec-hint">
               {{ result.external.artist || '未知歌手' }}<template v-if="result.external.album"> · 专辑 {{ result.external.album }}</template>
@@ -82,7 +93,13 @@
         </template>
         <template v-else>
           <div class="rec-miss">
-            <div class="rec-miss-icon">🤔</div>
+            <div class="rec-miss-icon">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
             <div class="rec-miss-title">没有认出这段音乐</div>
             <div class="rec-hint">可能是曲库里还没有这首歌，或者环境噪音太大</div>
           </div>
@@ -108,9 +125,9 @@ import { resolveFileUrl } from '../utils'
 const ROUNDS = [3, 6, 10, 10]
 
 const MODES = [
-  { key: 'tab', icon: '🖥', label: '系统声音' },
-  { key: 'mic', icon: '🎤', label: '麦克风' },
-  { key: 'file', icon: '📁', label: '本地文件' }
+  { key: 'tab', label: '系统声音', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' },
+  { key: 'mic', label: '麦克风', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>' },
+  { key: 'file', label: '本地文件', icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' }
 ]
 const MODE_DESC = {
   tab: '听电脑正在播放的声音（刷视频想知道 BGM 用这个），选择标签页时记得勾选「共享音频」',
@@ -186,7 +203,7 @@ async function start() {
   // 共享了画面但没勾音频：识曲无意义，直接引导重选
   if (stream.getAudioTracks().length === 0) {
     stream.getTracks().forEach((t) => t.stop())
-    ElMessage.warning('未勾选「共享音频」，请重新选择并勾选')
+    ElMessage.warning('未勾选「共享音频」：请重新选择标签页，并勾选左下角「同时共享标签页音频」')
     return
   }
   sourceStream = stream
@@ -383,12 +400,24 @@ onBeforeUnmount(() => reset())
   color: var(--text, #eee);
   background: color-mix(in srgb, var(--accent, #ff6b1a) 12%, transparent);
 }
-.rec-mode-icon { font-size: 20px; }
+.rec-mode-icon { display: flex; font-size: 20px; }
 .rec-desc {
   font-size: 12.5px;
   color: var(--text-faint, #b0a89c);
   line-height: 1.6;
   margin-bottom: 16px;
+}
+/* bug61：系统声音模式的共享音频分步指引 */
+.rec-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: -8px 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent, #ff6b1a) 6%, transparent);
+  font-size: 12px;
+  color: var(--text-muted, #8a8378);
 }
 .rec-act {
   display: flex;
@@ -476,6 +505,6 @@ onBeforeUnmount(() => reset())
   gap: 8px;
   padding: 18px 0 10px;
 }
-.rec-miss-icon { font-size: 38px; }
+.rec-miss-icon { font-size: 38px; color: var(--text-faint, #b0a89c); }
 .rec-miss-title { font-size: 15px; font-weight: 600; }
 </style>

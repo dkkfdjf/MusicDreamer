@@ -108,6 +108,10 @@ export const api = {
   userList: (params) => get('/user/list', params),
   setUserStatus: (data) => post('/user/status', data),
   createUser: (data) => post('/user/create', data),
+  // bug75：确保同名歌手账号存在（无则拼音用户名 + admin123 自动创建）
+  ensureSinger: (nickname) => post('/user/ensure-singer', { nickname }),
+  // bug81：删除用户（后端软删除）
+  userDelete: (id) => del(`/user/delete/${id}`),
 
   // ---------- 歌曲 ----------
   songSubmit: (data) => post('/song/submit', data),
@@ -227,7 +231,10 @@ export const api = {
   requestReject: (id, reason) => put(`/media/requests/${id}/reject`, { reason }),
   requestFulfill: (id, songId) => put(`/media/requests/${id}/fulfill`, { songId }),
   // 求歌入库：候选视频 URL → 下载任务，成功后后端自动回填申请状态
+  // bug85：本地已有同名已发布歌曲时返回 localSongId 直接完成；bug80：歌手账号缺失时返回 missingSinger
   requestDownload: (id, url) => post(`/media/requests/${id}/download`, { url }),
+  // bug80：管理员删除求歌记录（误提/测试记录清理）
+  requestDelete: (id) => del(`/media/requests/${id}`),
   // bilisearch 候选搜索（yt-dlp --flat-playlist，只拉元数据，1~3 秒）
   recognizeSearch: (kw) => get('/media/recognize/search', { kw }),
 
@@ -243,6 +250,8 @@ export const api = {
   },
   fingerprintStatus: () => get('/media/fingerprints/status'),
   fingerprintRebuild: () => post('/media/fingerprints/rebuild'),
+  // bug74：链接导入前预览（智能裁剪后的歌名/时长/UP主）
+  importPreview: (url) => get('/media/import/preview', { url }),
 
   // ---------- 配置 ----------
   settingAll: () => get('/setting/all'),

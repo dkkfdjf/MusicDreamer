@@ -86,4 +86,4 @@ export function isTaskTerminal(status) {
 }
 
 export const STYLES = ['流行', '摇滚', '民谣', '电子', '说唱', '古典', '爵士', 'R&B', '轻音乐', '原声带', '其他']
-export const LANGUAGES = ['国语', '英语', '日语', '韩语', '粤语', '纯音乐', '其他']
+// bug68：语言维度前端整体下线（后端 song.language 字段保留，后续要恢复再加回来）

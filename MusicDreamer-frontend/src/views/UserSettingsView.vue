@@ -45,6 +45,66 @@
       </button>
     </div>
 
+    <!-- bug66：我的歌曲（自上传中心迁移而来）：作品与审核状态统一在个人设置查看 -->
+    <div class="settings-card" v-if="userStore.isSinger">
+      <h2>我的歌曲</h2>
+      <el-table :data="mySongs" v-loading="mySongsLoading" size="small">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="name" label="歌名" min-width="140" />
+        <el-table-column label="播放" width="70" align="center">
+          <template #default="{ row }">{{ row.playCount ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="(SONG_STATUS[row.status] || {}).type">
+              {{ (SONG_STATUS[row.status] || {}).label || row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="驳回/下架原因" min-width="140">
+          <template #default="{ row }">
+            <span class="muted">{{ row.rejectReason || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" align="center">
+          <template #default="{ row }">
+            <el-button v-if="row.status === 1 && row.rejectReason" size="small" type="warning"
+              @click="resubmit(row)">重新提交</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="field-help" style="margin-top: 8px">
+        上传的作品与审核状态都在这里；提交新作品请前往上传中心
+      </div>
+    </div>
+
+    <!-- bug82：我的求歌记录；bug80：管理员处理后在这里可见，新变化标「新」 -->
+    <div class="settings-card">
+      <h2>我的求歌</h2>
+      <el-table :data="myRequests" v-loading="myRequestsLoading" size="small">
+        <el-table-column label="歌名" min-width="150">
+          <template #default="{ row }">
+            <span>{{ row.title }}<template v-if="row.artist"> - {{ row.artist }}</template></span>
+            <el-tag v-if="isNewReq(row)" size="small" type="danger" effect="plain" style="margin-left: 6px">新</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="提交时间" width="150">
+          <template #default="{ row }">{{ fmtTime(row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="140">
+          <template #default="{ row }">
+            <el-tag size="small" :title="row.rejectReason || ''"
+              :type="row.status === 1 ? 'success' : (row.status === 2 ? 'info' : 'warning')">
+              {{ reqLabel(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="field-help" style="margin-top: 8px">
+        管理员处理后会在这里更新；已入库显示歌曲编号，被拒显示原因（悬停查看）
+      </div>
+    </div>
+
     <!-- 修改密码弹窗：旧密码核验 + 新密码二次确认（bug1，替代不存在的 /change-password 路由） -->
     <el-dialog v-model="pwdVisible" title="修改密码" width="420px" append-to-body>
       <div class="form-group">
@@ -75,6 +135,7 @@ import { reactive, ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { message } from '../utils/feedback'
+import { listOf, SONG_STATUS } from '../utils'
 import api from '../api'
 
 const router = useRouter()
@@ -102,8 +163,69 @@ onMounted(() => {
   if (!userStore.isLogin) {
     message.warning('请先登录')
     router.push('/login')
+  } else {
+    loadMySongs()
+    loadMyRequests()
   }
 })
+
+/* bug66：我的歌曲（自上传中心迁移） */
+const mySongs = ref([])
+const mySongsLoading = ref(false)
+
+async function loadMySongs() {
+  if (!userStore.isSinger) return
+  mySongsLoading.value = true
+  try {
+    mySongs.value = listOf(await api.songMine({ page: 1, size: 50 }))
+  } finally {
+    mySongsLoading.value = false
+  }
+}
+
+async function resubmit(row) {
+  await api.songResubmit(row.id)
+  message.success('已重新提交审核')
+  loadMySongs()
+}
+
+/* bug82：我的求歌记录；bug80：以 localStorage 水位标记未读的处理结果 */
+const myRequests = ref([])
+const myRequestsLoading = ref(false)
+const REQ_SEEN_KEY = 'md-req-seen'
+let reqSeenAt = Number(localStorage.getItem(REQ_SEEN_KEY) || 0)
+
+async function loadMyRequests() {
+  myRequestsLoading.value = true
+  try {
+    myRequests.value = listOf(await api.requestMine())
+    // 本次渲染沿用进入页面前的水位；随后抬到最新——本次标「新」，下次刷新即消
+    const maxHandled = myRequests.value.reduce((m, r) => Math.max(m, tsOf(r.handledAt)), 0)
+    localStorage.setItem(REQ_SEEN_KEY, String(Math.max(reqSeenAt, maxHandled)))
+  } finally {
+    myRequestsLoading.value = false
+  }
+}
+
+function tsOf(v) {
+  const t = Date.parse(v || '')
+  return Number.isFinite(t) ? t : 0
+}
+
+function isNewReq(r) {
+  return r.status !== 0 && tsOf(r.handledAt) > reqSeenAt
+}
+
+function reqLabel(r) {
+  if (r.status === 1) return r.resultSongId ? `已入库 #${r.resultSongId}` : '已入库'
+  if (r.status === 2) return '已拒绝'
+  return '待处理'
+}
+
+function fmtTime(v) {
+  const t = new Date(v)
+  return Number.isNaN(t.getTime()) ? '-' : t.toLocaleString('zh-CN', { hour12: false })
+}
 
 async function saveNickname() {
   if (!canSaveNickname.value) return
@@ -228,6 +350,11 @@ function logout() {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .btn {

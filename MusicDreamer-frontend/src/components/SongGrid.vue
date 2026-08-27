@@ -16,9 +16,12 @@
             @error="onImgError(row, i)">
           <span v-else class="ph" :class="ph(row)"></span>
 
-          <!-- 悬停：中央播放钮 -->
+          <!-- 悬停：中央播放钮（bug79：当前曲播放中应显示暂停态，而非一律播放三角） -->
           <span class="play-fab" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z" /></svg>
+            <svg v-if="isPlaying(row) && playerStore.playing" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z" /></svg>
           </span>
 
           <!-- 右上角操作 -->
