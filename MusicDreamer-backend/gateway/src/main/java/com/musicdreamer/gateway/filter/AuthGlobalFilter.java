@@ -42,7 +42,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /** 匿名可访问。 */
     private static final String[] WHITELIST = {
             "/api/v1/user/login", "/api/v1/user/register", "/api/v1/user/activate",
-            "/api/v1/user/password/reset",
+            "/api/v1/user/password/reset", "/api/v1/user/wx/login",
             "/api/v1/search/**", "/api/v1/song/play/**", "/api/v1/song/detail/**",
             "/api/v1/song/chart/**",
             "/api/v1/comment/list/**", "/api/v1/recommend/list",

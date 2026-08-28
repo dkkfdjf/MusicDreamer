@@ -5,9 +5,12 @@ import com.musicdreamer.common.auth.AuthContext;
 import com.musicdreamer.login.dto.LoginDTO;
 import com.musicdreamer.login.dto.RegisterDTO;
 import com.musicdreamer.login.dto.UpdateUserInfoDTO;
+import com.musicdreamer.login.dto.WxLoginDTO;
 import com.musicdreamer.login.service.AuthService;
 import com.musicdreamer.login.service.UserService;
+import com.musicdreamer.login.service.WxAuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +36,7 @@ public class UserController {
 
     private final AuthService authService;
     private final UserService userService;
+    private final WxAuthService wxAuthService;
 
     /** 注册并发送激活邮件（匿名）。 */
     @PostMapping("/register")
@@ -60,6 +64,26 @@ public class UserController {
     @PostMapping("/logout")
     public Mess logout() {
         authService.logout();
+        return Mess.ok();
+    }
+
+    /** 微信小程序一键登录（匿名，网关白名单）：openid 未绑定则自动建号。 */
+    @PostMapping("/wx/login")
+    public Mess wxLogin(@Valid @RequestBody WxLoginDTO dto, HttpServletRequest request) {
+        return Mess.ok(wxAuthService.wxLogin(dto.getCode(), request));
+    }
+
+    /** 当前用户绑定微信（登录）。 */
+    @PostMapping("/wx/bind")
+    public Mess bindWx(@Valid @RequestBody WxLoginDTO dto) {
+        wxAuthService.bindWx(AuthContext.requireLogin(), dto.getCode());
+        return Mess.ok();
+    }
+
+    /** 当前用户解绑微信（登录）。 */
+    @DeleteMapping("/wx/bind")
+    public Mess unbindWx() {
+        wxAuthService.unbindWx(AuthContext.requireLogin());
         return Mess.ok();
     }
 

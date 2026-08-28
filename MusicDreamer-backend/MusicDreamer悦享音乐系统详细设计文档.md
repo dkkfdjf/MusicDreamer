@@ -1394,3 +1394,31 @@ Docker Desktop 采用 WSL2 后端；容器互连时配置中的 localhost 一律
 | P6 | Sentinel 熔断限流、任务自愈、故障演练 |
 
 编码与联调必查的经验约束（源项目实测教训）：子进程调用必须全异步（同步会冻结整个服务）；命令必须数组参数（拼接遇特殊字符必错）；B 站 412 根因是旧版 yt-dlp 加缺 cookie，两层防护缺一不可；ffmpeg 响度结果在 stderr；大模型文件必须确认后才下载且需体积校验；取消任务必须结束进程并清理临时文件；JVM 与脚本统一 UTF-8；删除资源必须删全套；长任务必须进度可见且可取消；前端弹层事件需 stopPropagation 处理。
+
+# 17 微信小程序端（uniapp）与微信登录
+
+## 17.1 端与工程
+
+微信小程序为主目标端（体验版演示，不做公开发布），Vue3 + Vite 版 uni-app，工程 `uniapp/`（与 backend/frontend 平级独立仓库）。所有 @dcloudio/\* 锁同一版本（`3.0.0-5020420260813003`）。开发 `npm run dev:mp-weixin` 产物 `dist/dev/mp-weixin` 导入微信开发者工具；`manifest.json` 的 `mp-weixin.appid` 为小程序 AppID。
+
+## 17.2 微信一键登录链路
+
+```
+小程序 wx.login() 取 code（一次性，5 分钟）
+  → POST /api/v1/user/wx/login（网关 WHITELIST 放行）
+  → Mod_login WxAuthServiceImpl 调 jscode2session（appid + app-secret）换 openid
+  → user.wx_openid 命中 → 直接签发 JWT（与口令登录同构：session:{uid}、登录日志、auth floor 兼容）
+  → 未命中 → 自动建号：username=wx_{openid}、占位邮箱 wx_{openid}@wx.placeholder（满足 NOT NULL+唯一）、
+    随机 UUID 密码（不可口令登录）、昵称"悦友"xxxx；并发首登靠唯一索引兜底后重查
+```
+
+- 迁移 `V6__user_wx_openid.sql`（Mod_songList Flyway，全库迁移约定位置）：`user` 加 `wx_openid VARCHAR(64) NULL` + 唯一索引，已实跑验证。
+- 绑定/解绑：`POST / DELETE /api/v1/user/wx/bind`（登录态），供已有账号在设置里绑定微信；openid 已被他人绑定报 2009。
+- 错误码：2008 微信登录凭证无效（jscode2session errcode≠0）、2009 微信已绑定其他账号。
+- **AppSecret 不进前端**：仅存 Mod_login 的 gitignored `application-secret.yml`（`wx.app-secret`）或环境变量 `WX_APP_SECRET`，yml 默认值为空。
+
+## 17.3 小程序端约束（与 Web 端差异）
+
+- 请求封装 `src/utils/request.js`：BASE_URL 走电脑局域网 IP（真机与电脑同一 WiFi），自动带 Bearer token；2006 清登录态回登录页；登录/发 JWT/错误码语义与 Web 端完全一致。
+- 演示全链路无需公网/备案：真机开"开发调试→不校验合法域名"；注意 Windows 防火墙放行 8080。
+- 音频播放将用 BackgroundAudioManager（后台/锁屏播放），Web 端 Web Audio 频谱在小程序不可用（后续以 CSS 动画降级）。

@@ -28,6 +28,9 @@ public class User {
 
     private String avatar;
 
+    /** 微信小程序 openid（uniapp 端登录/绑定；null=未绑定）。 */
+    private String wxOpenid;
+
     /** 0 普通用户 1 认证歌手 2 管理员。 */
     private Integer role;
 

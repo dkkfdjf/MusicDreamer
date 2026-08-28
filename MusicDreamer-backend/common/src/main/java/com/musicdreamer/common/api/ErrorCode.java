@@ -22,6 +22,8 @@ public enum ErrorCode {
     USER_DISABLED(2005, "用户已被禁用"),
     TOKEN_EXPIRED(2006, "Token已过期"),
     NO_PERMISSION(2007, "权限不足"),
+    WX_CODE_INVALID(2008, "微信登录凭证无效或已过期"),
+    WX_ALREADY_BOUND(2009, "该微信已绑定其他账号"),
 
     SONG_NOT_FOUND(3001, "歌曲不存在"),
     SONG_UNDER_REVIEW(3002, "歌曲审核中不可播放"),
