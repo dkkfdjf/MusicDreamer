@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import api from '../api'
 import { useUserStore } from './user'
 import { resolveFileUrl, singerName } from '../utils'
+import { setOutputVolume } from '../utils/audioAnalyser'
 
 let audioEl = null
 let listenersBound = false
@@ -102,7 +103,9 @@ export const usePlayerStore = defineStore('player', {
         }
       })
     },
-    // 响度补偿：audio.volume = 基准音量 * 10^(gain/20)，clamp 0-1；gain 为 null 时用基准音量
+    // 响度补偿：最终音量 = 基准音量 * 10^(gain/20)，clamp 0-1。
+    // 音量优先落 WebAudio 增益节点（在频谱分析器之后）：应用内静音/音量0 不影响动效；
+    // 图未建时退回 audio.volume，建图瞬间由 audioAnalyser 读回最近目标值补挂
     applyVolume() {
       const a = getAudio()
       let v = this.volume
@@ -110,7 +113,12 @@ export const usePlayerStore = defineStore('player', {
       if (this.volumeGain !== null && this.volumeGain !== undefined && !Number.isNaN(gain)) {
         v = this.volume * Math.pow(10, gain / 20)
       }
-      a.volume = Math.min(1, Math.max(0, v))
+      v = Math.min(1, Math.max(0, v))
+      if (setOutputVolume(v)) {
+        a.volume = 1 // 增益节点已接管，元素保持满幅（否则双重衰减，实际响度变轻）
+      } else {
+        a.volume = v
+      }
     },
     setVolume(v) {
       this.volume = Math.min(1, Math.max(0, v))
