@@ -37,3 +37,10 @@ cover-check.png
 # 个性化脚本与配置（不同开发者环境不同）
 scripts/
 
+
+# 微信小程序 AppSecret 等本地私密配置
+application-secret.yml
+
+# Docker 一键脚本与构建辅助（仓库外大文件，不进 Git）
+tools.zip
+docker-extras/

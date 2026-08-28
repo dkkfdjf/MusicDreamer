@@ -5,7 +5,7 @@ spring:
   application:
     name: mediaService8010
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/music?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/music?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:hce200572}
     driver-class-name: com.mysql.cj.jdbc.Driver
