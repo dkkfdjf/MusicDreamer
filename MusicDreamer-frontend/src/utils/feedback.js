@@ -21,24 +21,29 @@ export const message = {
 }
 
 // 确认框：返回 Promise —— 确认 resolve，取消 reject（对齐 ElMessageBox.confirm）
+// weui dialog 是模块级单例：点按钮后要等 0.3s 淡出动画播完 _sington 才复位，
+// 期间再调 confirm 会拿到垂死的旧节点、新窗不渲染、Promise 永不 settle。
+// 故自管关闭：onClick 里显式 dlg.hide(cb)（cb 在 animationend 即单例复位后触发），
+// resolve/reject 均延后到该时刻，连续两次 confirm 之间天然隔出安全窗口。
 export function confirm(content, { title = '提示', okText = '确定', cancelText = '取消' } = {}) {
   return new Promise((resolve, reject) => {
-    weui.confirm(
-      content,
-      () => resolve(true),
-      () => reject(new Error('cancel')),
-      { title, buttons: [
-        { label: cancelText, type: 'default', onClick: () => reject(new Error('cancel')) },
-        { label: okText, type: 'primary', onClick: () => resolve(true) }
-      ] }
-    )
+    const dlg = weui.confirm(content, {
+      title,
+      buttons: [
+        { label: cancelText, type: 'default', onClick: () => { dlg.hide(() => reject(new Error('cancel'))); return false } },
+        { label: okText, type: 'primary', onClick: () => { dlg.hide(() => resolve(true)); return false } }
+      ]
+    })
   })
 }
 
-// 告知框：返回 Promise，点击确定后 resolve
+// 告知框：返回 Promise，点击确定后 resolve（同样等弹窗关闭、单例复位后再 settle）
 export function alert(content, { title = '提示', okText = '知道了' } = {}) {
   return new Promise((resolve) => {
-    weui.alert(content, () => resolve(true), { title, buttons: [{ label: okText, type: 'primary' }] })
+    const dlg = weui.alert(content, {
+      title,
+      buttons: [{ label: okText, type: 'primary', onClick: () => { dlg.hide(() => resolve(true)); return false } }]
+    })
   })
 }
 

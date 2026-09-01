@@ -582,6 +582,7 @@ async function pickCandidate(c) {
         return
       }
     }
+    if (!data || !data.taskId) { message.error('未获取到下载任务，请稍后重试'); return }
     taskStore.track(data.taskId, 'DOWNLOAD')
     message.success('已开始下载，完成后求歌状态自动回填')
     reqDrawer.value = false

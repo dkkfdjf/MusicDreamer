@@ -16,8 +16,8 @@
             @error="onImgError(row, i)">
           <span v-else class="ph" :class="ph(row)"></span>
 
-          <!-- 悬停：中央播放钮（bug79：当前曲播放中应显示暂停态，而非一律播放三角） -->
-          <span class="play-fab" aria-hidden="true">
+          <!-- 悬停：中央播放钮（bug79：图标随播放态切换；点击=当前曲暂停/继续，其他歌播放） -->
+          <span class="play-fab" @click.stop="onFabClick(row, i)">
             <svg v-if="isPlaying(row) && playerStore.playing" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" />
             </svg>
@@ -74,7 +74,7 @@ const props = defineProps({
   showCollect: { type: Boolean, default: true },
   pager: { type: Boolean, default: false }
 })
-defineEmits(['play'])
+const emit = defineEmits(['play'])
 
 const playerStore = usePlayerStore()
 const userStore = useUserStore()
@@ -89,6 +89,11 @@ function keyOf(row, i) {
 }
 function isPlaying(row) {
   return playerStore.current && playerStore.current.id === row.id
+}
+// 中央钮：当前曲=暂停/继续，其他歌=播放该首（点父级 play 事件）
+function onFabClick(row, i) {
+  if (isPlaying(row)) playerStore.toggle()
+  else emit('play', i)
 }
 function ph(row) {
   return 'c' + ((Number(row.id || 0) % 6) + 1)
