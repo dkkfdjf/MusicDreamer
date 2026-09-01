@@ -6,6 +6,10 @@ declare const wx: any
 declare const getApp: () => any
 declare const getCurrentPages: () => any[]
 declare const console: { log: (...args: any[]) => void; error: (...args: any[]) => void; warn: (...args: any[]) => void }
+declare function setInterval(fn: (...args: any[]) => void, ms: number, ...args: any[]): number
+declare function clearInterval(id: number): void
+declare function setTimeout(fn: (...args: any[]) => void, ms: number, ...args: any[]): number
+declare function clearTimeout(id: number): void
 declare function Page(options: IAnyObject): void
 declare function Component(options: IAnyObject): void
 declare function App(options: IAnyObject): void

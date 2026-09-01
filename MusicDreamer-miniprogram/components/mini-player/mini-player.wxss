@@ -1,0 +1,20 @@
+.mp {
+  position: fixed;
+  left: 20rpx;
+  right: 20rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 110rpx); /* tab 页在 tabBar 上方；非 tab 页同样位置 */
+  display: flex;
+  align-items: center;
+  padding: 14rpx 20rpx;
+  background: var(--card);
+  border-radius: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(93, 76, 60, 0.16);
+  z-index: 99;
+}
+.mp-cover { width: 72rpx; height: 72rpx; border-radius: 50%; background: var(--line); flex-shrink: 0; }
+.mp-cover.spin { animation: mp-rotate 8s linear infinite; }
+@keyframes mp-rotate { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.mp-main { flex: 1; min-width: 0; margin: 0 20rpx; }
+.mp-name { font-size: 28rpx; font-weight: 600; }
+.mp-singer { font-size: 22rpx; color: var(--text-sub); }
+.mp-btn { padding: 10rpx 20rpx; font-size: 34rpx; color: var(--brand); flex-shrink: 0; }

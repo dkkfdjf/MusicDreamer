@@ -1,0 +1,10 @@
+<view class="si card {{playing ? 'si-on' : ''}}" bindtap="onTap">
+  <image class="si-cover" src="{{song.coverUrl}}" mode="aspectFill" lazy-load="{{true}}" />
+  <view class="si-main">
+    <view class="si-name ellipsis">{{song.name}}</view>
+    <view class="si-sub ellipsis">{{song.singer}}{{song.album ? ' · ' + song.album : ''}}</view>
+  </view>
+  <view class="si-dur">{{durText}}</view>
+  <view wx:if="{{showCollect}}" class="si-act {{collected ? 'on' : ''}}" catchtap="onCollect">{{collected ? '♥' : '♡'}}</view>
+  <view class="si-more" catchtap="onMore">⋯</view>
+</view>

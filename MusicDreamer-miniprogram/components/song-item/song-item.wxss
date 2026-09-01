@@ -1,0 +1,10 @@
+.si { display: flex; align-items: center; padding: 16rpx 20rpx; margin-bottom: 16rpx; }
+.si-on { border: 1rpx solid var(--brand); }
+.si-cover { width: 88rpx; height: 88rpx; border-radius: 12rpx; background: var(--line); flex-shrink: 0; }
+.si-main { flex: 1; min-width: 0; margin: 0 16rpx; }
+.si-name { font-size: 30rpx; font-weight: 600; }
+.si-on .si-name { color: var(--brand); }
+.si-sub { font-size: 24rpx; color: var(--text-sub); margin-top: 4rpx; }
+.si-dur { font-size: 22rpx; color: var(--text-sub); flex-shrink: 0; }
+.si-act, .si-more { padding: 12rpx 12rpx; color: var(--text-sub); font-size: 36rpx; flex-shrink: 0; }
+.si-act.on { color: var(--brand); }

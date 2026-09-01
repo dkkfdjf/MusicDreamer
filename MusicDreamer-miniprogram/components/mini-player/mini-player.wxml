@@ -1,0 +1,9 @@
+<view wx:if="{{cur}}" class="mp" bindtap="openPlaying">
+  <image class="mp-cover {{playing ? 'spin' : ''}}" src="{{cover}}" mode="aspectFill" />
+  <view class="mp-main">
+    <view class="mp-name ellipsis">{{cur.name}}</view>
+    <view class="mp-singer ellipsis">{{cur.singer}}</view>
+  </view>
+  <view class="mp-btn" catchtap="onToggle">{{playing ? '⏸' : '▶'}}</view>
+  <view class="mp-btn" catchtap="onNext">⏭</view>
+</view>
