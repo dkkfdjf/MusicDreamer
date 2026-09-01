@@ -5,6 +5,7 @@ type IAnyFunction = (...args: any[]) => any
 declare const wx: any
 declare const getApp: () => any
 declare const getCurrentPages: () => any[]
+declare const console: { log: (...args: any[]) => void; error: (...args: any[]) => void; warn: (...args: any[]) => void }
 declare function Page(options: IAnyObject): void
 declare function Component(options: IAnyObject): void
 declare function App(options: IAnyObject): void
