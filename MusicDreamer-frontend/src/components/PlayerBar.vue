@@ -2,7 +2,8 @@
   <footer class="player-bar" ref="rootEl">
     <!-- 左：当前曲目 + 收藏（喜欢属于曲日本身，语境化放封面旁） -->
     <div class="track">
-      <div class="cv">
+      <div class="cv" :class="{ tappable: !!player.current }" :title="cvTitle"
+        @click="onCoverClick">
         <img v-if="player.current && player.current.coverUrl && !coverFail"
           :src="resolveFileUrl(player.current.coverUrl)" alt="封面" @error="coverFail = true" />
         <div v-else class="ph">♪</div>
@@ -209,6 +210,18 @@ const wordTitle = computed(() => {
   return lyrics.panelOpen ? '收起歌词' : '展开歌词'
 })
 
+/* 封面悬停提示跟随状态：无歌不提示；有歌提示点击会发生什么 */
+const cvTitle = computed(() => {
+  if (!player.current) return ''
+  return lyrics.panelOpen ? '收起歌词' : '查看歌词'
+})
+
+/* 单击头像 ⇄ 开关歌词面板（与「詞」按钮同驱 lyrics.panelOpen）；
+   未播放时忽略 —— 没有歌就没有歌词可看 */
+function onCoverClick() {
+  if (player.current) lyrics.togglePanel()
+}
+
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const rateLabel = computed(() => (Number(player.rate) || 1).toFixed(2).replace(/0$/, '') + 'x')
 const abLabel = computed(() => {
@@ -347,6 +360,17 @@ function toggleMute() {
   justify-content: center;
   font-size: 20px;
   color: var(--accent);
+}
+/* 单击头像开关歌词：仅在有歌时给可点暗示（cursor + 悬停微缩放），
+   未播放时保持默认光标避免误导 */
+.track .cv.tappable {
+  cursor: pointer;
+}
+.track .cv.tappable:hover {
+  transform: scale(1.03);
+}
+.track .cv {
+  transition: transform 0.2s ease;
 }
 .track .meta {
   min-width: 0;
