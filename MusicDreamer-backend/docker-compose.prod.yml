@@ -1,0 +1,179 @@
+# Music Dreamer 悦享音乐系统 —— 2G 内存服务器专用编排（最小业务集）
+# 客户端为微信小程序，直连网关 8080；Vue Web 前端不需要部署。
+#
+# 与开发版 docker-compose.yml 的差异：
+#   - 只起 6 个核心微服务：gateway / login / music / songlist / like / upload
+#     砍掉 mod-media（AI 听写/B站导入，原镜像 -Xmx1g）、mod-setting（仅 media 依赖）、监控四件套
+#   - JVM 显式压堆：-Xmx192m（覆盖 Dockerfile.service 内置的 -Xmx512m）
+#   - MySQL/Redis/Nacos 内存调优
+#   - 只对公网暴露 8080（3307/6380/8848 映射是 Windows 开发机防端口冲突用的）
+#   - 每个容器设 mem_limit + oom_score_adj，配合宿主机 2-4G swap 防启动高峰 OOM
+#
+# 用法：docker compose -f docker-compose.prod.yml up -d
+# 前置：宿主机先加 swap（见 docs/2G服务器部署手册.md 第 1 步）
+# 网关里 media/setting 的路由仍在（打包在 jar 内），调用会 503，小程序基本业务不会用到
+
+# 统一的 JVM 参数：小堆 + 封顶元空间 + SerialGC（小堆下开销最低）
+x-java-entrypoint: &java-entrypoint
+  entrypoint: ["java", "-Xms64m", "-Xmx192m",
+    "-XX:MaxMetaspaceSize=128m", "-XX:+UseSerialGC",
+    "-Dfile.encoding=UTF-8", "-jar", "/app.jar"]
+
+services:
+  mysql:
+    image: mysql:8.0
+    # 2G 机器调优：128M 缓冲池、关 performance_schema、压连接与会话缓冲
+    command: >
+      --character-set-server=utf8mb4
+      --innodb_buffer_pool_size=128M
+      --innodb_log_buffer_size=8M
+      --key_buffer_size=8M
+      --max_connections=60
+      --performance-schema=OFF
+      --tmp_table_size=16M
+      --max_heap_table_size=16M
+      --sort_buffer_size=256K
+      --join_buffer_size=256K
+      --table_open_cache=200
+      --thread_cache_size=16
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: music
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d
+    mem_limit: 450m
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 10
+
+  redis:
+    image: redis:6
+    # 不做持久化（纯缓存用）；所有使用方（gateway fail-open / login token / music、like 缓存）
+    # 都有降级逻辑，OOM 时最先牺牲它
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction",
+      "--save", "", "--appendonly", "no"]
+    mem_limit: 96m
+    oom_score_adj: 500
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 10
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    environment:
+      MODE: standalone
+      # 覆盖镜像默认 -Xms512m -Xmx512m；-XX:-UseContainerSupport 沿用开发版的
+      # Derby 初始化 workaround（JDK8 + cgroup v2），带显式堆大小时无副作用
+      JAVA_OPT: "-XX:-UseContainerSupport -Xms128m -Xmx256m -Xmn64m"
+    # 仅容器网络内互通；要临时看控制台时再加 "8848:8848" 映射
+    mem_limit: 400m
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos || exit 1"]
+      interval: 15s
+      retries: 10
+
+  # ---------- 业务服务（统一模板镜像，环境变量区分模块） ----------
+  gateway:
+    build: { context: ., dockerfile: Dockerfile.service, args: { SVC: gateway } }
+    <<: *java-entrypoint
+    environment: { SVC: gateway, PORT: 8080, NACOS_ADDR: nacos:8848, REDIS_HOST: redis }
+    ports: ["8080:8080"]
+    mem_limit: 384m
+    restart: always
+    depends_on:
+      nacos: { condition: service_healthy }
+
+  mod-login:
+    build: { context: ., dockerfile: Dockerfile.service, args: { SVC: Mod_login } }
+    <<: *java-entrypoint
+    environment:
+      SVC: Mod_login
+      PORT: 8001
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: "123456"
+      NACOS_ADDR: nacos:8848
+      REDIS_HOST: redis
+      # 微信小程序登录密钥：部署时在服务器上建 .env 写 WX_APPID / WX_APP_SECRET
+      WX_APPID: ${WX_APPID:-}
+      WX_APP_SECRET: ${WX_APP_SECRET:-}
+    mem_limit: 320m
+    restart: always
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      nacos: { condition: service_healthy }
+
+  mod-music:
+    build: { context: ., dockerfile: Dockerfile.service, args: { SVC: Mod_music } }
+    <<: *java-entrypoint
+    environment:
+      SVC: Mod_music
+      PORT: 8002
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: "123456"
+      NACOS_ADDR: nacos:8848
+      REDIS_HOST: redis
+    mem_limit: 384m
+    restart: always
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      nacos: { condition: service_healthy }
+
+  mod-upload:
+    build: { context: ., dockerfile: Dockerfile.service, args: { SVC: Mod_upload } }
+    <<: *java-entrypoint
+    environment:
+      SVC: Mod_upload
+      PORT: 8007
+      STORAGE_ROOT: /data
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: "123456"
+      NACOS_ADDR: nacos:8848
+    volumes: ["./data:/data"]
+    mem_limit: 320m
+    restart: always
+    depends_on:
+      mysql: { condition: service_healthy }
+      nacos: { condition: service_healthy }
+
+  mod-songlist:
+    build: { context: ., dockerfile: Dockerfile.service, args: { SVC: Mod_songList } }
+    <<: *java-entrypoint
+    environment:
+      SVC: Mod_songList
+      PORT: 8008
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: "123456"
+      NACOS_ADDR: nacos:8848
+    mem_limit: 320m
+    restart: always
+    depends_on:
+      mysql: { condition: service_healthy }
+      nacos: { condition: service_healthy }
+
+  mod-like:
+    build: { context: ., dockerfile: Dockerfile.service, args: { SVC: Mod_like } }
+    <<: *java-entrypoint
+    environment:
+      SVC: Mod_like
+      PORT: 8009
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: "123456"
+      NACOS_ADDR: nacos:8848
+      REDIS_HOST: redis
+    mem_limit: 320m
+    restart: always
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      nacos: { condition: service_healthy }
+
+volumes:
+  mysql_data: {}

@@ -34,6 +34,9 @@ services:
     image: nacos/nacos-server:v2.2.3
     environment:
       MODE: standalone
+      # docker-startup.sh 会把 JAVA_OPT 拼进命令行；禁用容器感知，
+      # 绕过 JDK 8 在 WSL2 cgroup v2 下 Derby 初始化 NPE 的已知 bug
+      JAVA_OPT: "-XX:-UseContainerSupport"
     # 9848 是 nacos 2.x 客户端 gRPC 端口：容器网络内互通无需映射，
     # 但"宿主机 IDEA 跑服务"模式必须映射出来，否则注册不上（HTTP 8848 通也没用）
     ports: ["8848:8848", "9848:9848"]
@@ -143,6 +146,8 @@ services:
       SVC: Mod_media
       PORT: 8010
       STORAGE_ROOT: /data
+      # 镜像内置工具目录（yt-dlp/whisper-cli）；ToolsLocator 按 tools_path 探测
+      TOOLS_PATH: /opt/tools
       MYSQL_HOST: mysql
       MYSQL_PASSWORD: "123456"
       NACOS_ADDR: nacos:8848

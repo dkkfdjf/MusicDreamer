@@ -158,8 +158,10 @@ public class UserServiceImpl implements UserService {
             throw new BizException(ErrorCode.PARAM_OUT_OF_RANGE.getCode(), "歌手名需 1-50 字");
         }
         // 同名歌手（或管理员）账号已存在则直接复用，不重复创建
+        // 只认活跃账号（status=1）：软删除（status=2）的账号登录即拒、下载侧
+        // findSingerIdByNickname 也不可见，若在此复用会造成"创建了却仍 missingSinger"
         User exist = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getNickname, name).in(User::getRole, 1, 2)
+                .eq(User::getNickname, name).in(User::getRole, 1, 2).eq(User::getStatus, 1)
                 .orderByAsc(User::getId).last("limit 1"));
         Map<String, Object> data = new HashMap<>();
         if (exist != null) {

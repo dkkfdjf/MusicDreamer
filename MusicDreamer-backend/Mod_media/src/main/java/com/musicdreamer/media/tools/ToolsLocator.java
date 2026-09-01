@@ -90,9 +90,11 @@ public class ToolsLocator {
                 }
             }
         }
-        // PATH 兜底（ProcessBuilder 直接用名字解析）
+        // PATH 兜底（ProcessBuilder 直接用名字解析）；注意必须带各自
+        // 的探测参数——Linux 版 ffmpeg 不认默认的 --version（exit 8），
+        // 只认 -version，曾导致容器内明明装了 ffmpeg 仍报"未安装"
         for (String name : names) {
-            if (execVersion(name) != null) {
+            if (execVersion(name, probeArgs(tool)) != null) {
                 return name;
             }
         }

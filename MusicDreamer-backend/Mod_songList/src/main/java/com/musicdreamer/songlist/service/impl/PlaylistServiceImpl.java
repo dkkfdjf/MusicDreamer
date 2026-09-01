@@ -293,9 +293,7 @@ public class PlaylistServiceImpl implements PlaylistService {
         long pageSize = size <= 0 ? 10 : Math.min(100, size);
 
         LambdaQueryWrapper<Playlist> qw = new LambdaQueryWrapper<Playlist>()
-                .eq(Playlist::getIsPublic, true)
-                // 登录用户在广场看不到自己的歌单（自己的在"我的歌单"里）
-                .ne(userId != null, Playlist::getUserId, userId);
+                .eq(Playlist::getIsPublic, true);
         if (keyword != null && !keyword.isBlank()) {
             qw.like(Playlist::getName, keyword.trim());
         }

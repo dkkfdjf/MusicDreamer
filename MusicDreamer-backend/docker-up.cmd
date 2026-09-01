@@ -3,14 +3,16 @@ setlocal
 cd /d "%~dp0"
 
 echo ================================================
-echo   MusicDreamer Docker Ò»¼üÆô¶¯
+echo   MusicDreamer Docker Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 echo ================================================
 
-REM ---------- 1/4 Docker ÒýÇæ ----------
+REM ---------- 1/4 Docker ï¿½ï¿½ï¿½ï¿½ ----------
 docker info >nul 2>&1
 if not errorlevel 1 goto engine_ok
-echo [1/4] Docker ÒýÇæÎ´¾ÍÐ÷£¬ÕýÔÚÀ­Æð Docker Desktop£¨ÀäÆô¶¯Ô¼ 30-60 Ãë£©...
-start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+echo [1/4] Docker ï¿½ï¿½ï¿½ï¿½Î´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Docker Desktopï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ 30-60 ï¿½ë£©...
+set "DD_EXE=%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
+if not exist "%DD_EXE%" set "DD_EXE=C:\Program Files\Docker\Docker\Docker Desktop.exe"
+start "" "%DD_EXE%"
 set /a tries=0
 :wait_engine
 ping -n 4 127.0.0.1 >nul
@@ -18,23 +20,23 @@ docker info >nul 2>&1
 if not errorlevel 1 goto engine_ok
 set /a tries+=1
 if %tries% lss 40 goto wait_engine
-echo [Ê§°Ü] µÈ´ý Docker ÒýÇæ³¬Ê±¡£ÇëÊÖ¶¯´ò¿ª Docker Desktop£¬µÈ¾¨ÓãÍ¼±êÎÈ¶¨ºóÔÙÔËÐÐ±¾½Å±¾¡£
+echo [Ê§ï¿½ï¿½] ï¿½È´ï¿½ Docker ï¿½ï¿½ï¿½æ³¬Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ Docker Desktopï¿½ï¿½ï¿½È¾ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½È¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð±ï¿½ï¿½Å±ï¿½ï¿½ï¿½
 pause
 exit /b 1
 :engine_ok
-echo [1/4] Docker ÒýÇæ¾ÍÐ÷¡£
+echo [1/4] Docker ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-REM ---------- 2/4 ÆðÈÝÆ÷ ----------
+REM ---------- 2/4 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ----------
 echo [2/4] docker compose up -d ...
 docker compose up -d mysql redis nacos gateway mod-login mod-music mod-setting mod-upload mod-songlist mod-like mod-media
 if errorlevel 1 (
-    echo [Ê§°Ü] compose Æô¶¯³ö´í£¬¼ûÉÏ·½±¨´íÐÅÏ¢¡£
+    echo [Ê§ï¿½ï¿½] compose ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½
     pause
     exit /b 1
 )
 
-REM ---------- 3/4 µÈ·þÎñ×¢²á½ø Nacos ----------
-echo [3/4] µÈ´ý 8 ¸ö·þÎñ×¢²á½ø Nacos£¨Ò»°ã 1-2 ·ÖÖÓ£©...
+REM ---------- 3/4 ï¿½È·ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ Nacos ----------
+echo [3/4] ï¿½È´ï¿½ 8 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ Nacosï¿½ï¿½Ò»ï¿½ï¿½ 1-2 ï¿½ï¿½ï¿½Ó£ï¿½...
 set /a tries=0
 :wait_svc
 set CNT=0
@@ -45,34 +47,34 @@ if %tries% geq 48 goto svc_timeout
 ping -n 6 127.0.0.1 >nul
 goto wait_svc
 :svc_timeout
-echo [ÌáÐÑ] 4 ·ÖÖÓÄÚÎ´¼¯Æë 8 ¸ö·þÎñ£¨µ±Ç° %CNT% ¸ö£©¡£
-echo        ÓÃ docker compose ps ¿´ÊÇ·ñÓÐÈÝÆ÷ÔÚ·´¸´ÖØÆô£¬»ò²é¡¶DockerÊ¹ÓÃ½Ì³Ì¡·¿Ó±í¡£
+echo [ï¿½ï¿½ï¿½ï¿½] 4 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î´ï¿½ï¿½ï¿½ï¿½ 8 ï¿½ï¿½ï¿½ï¿½ï¿½ñ£¨µï¿½Ç° %CNT% ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+echo        ï¿½ï¿½ docker compose ps ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é¡¶DockerÊ¹ï¿½Ã½Ì³Ì¡ï¿½ï¿½Ó±ï¿½ï¿½ï¿½
 goto summary
 :svc_ok
-echo [3/4] 8/8 ·þÎñÈ«²¿×¢²áÍê³É¡£
+echo [3/4] 8/8 ï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½É¡ï¿½
 
-REM ---------- 4/4 Ç°¶Ë ----------
+REM ---------- 4/4 Ç°ï¿½ï¿½ ----------
 set FECNT=0
 for /f %%i in ('powershell -NoProfile -Command "@(Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue).Count" 2^>nul') do set FECNT=%%i
 if %FECNT% GEQ 1 (
-    echo [4/4] Ç°¶ËÒÑÔÚÔËÐÐ£¨5173 ¶Ë¿ÚÕ¼ÓÃÖÐ£©£¬Ìø¹ý¡£
+    echo [4/4] Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½5173 ï¿½Ë¿ï¿½Õ¼ï¿½ï¿½ï¿½Ð£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     goto summary
 )
 if not exist "%~dp0..\frontend\node_modules" (
-    echo [4/4] Ç°¶ËÒÀÀµÎ´°²×°£¬Ìø¹ý¡£ÐèÒªÊ±£ºcd frontend ºóÖ´ÐÐ npm install ºÍ npm run dev
+    echo [4/4] Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î´ï¿½ï¿½×°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÒªÊ±ï¿½ï¿½cd frontend ï¿½ï¿½Ö´ï¿½ï¿½ npm install ï¿½ï¿½ npm run dev
     goto summary
 )
-echo [4/4] ÒÑÔÚÐÂ´°¿ÚÆô¶¯Ç°¶Ë vite£¨¹ØµôÄÇ¸ö´°¿Ú = Í£Ç°¶Ë£©...
+echo [4/4] ï¿½ï¿½ï¿½ï¿½ï¿½Â´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ viteï¿½ï¿½ï¿½Øµï¿½ï¿½Ç¸ï¿½ï¿½ï¿½ï¿½ï¿½ = Í£Ç°ï¿½Ë£ï¿½...
 start "MusicDreamer-frontend" cmd /k "cd /d %~dp0..\frontend && npm run dev"
 
 :summary
 echo.
 echo ================================================
-echo   È«Õ»ÒÑ¾ÍÐ÷£¬ä¯ÀÀÆ÷·ÃÎÊ£º
-echo     Ç°¶ËÑÝÊ¾      http://localhost:5173
-echo     Íø¹Ø API      http://localhost:8080
-echo     Nacos ¿ØÖÆÌ¨  http://localhost:8848/nacos  ÕËºÅ nacos/nacos
-echo   Í£Ö¹£ºË«»÷ docker-down.cmd£¨Êý¾Ý±£Áô£©
+echo   È«Õ»ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê£ï¿½
+echo     Ç°ï¿½ï¿½ï¿½ï¿½Ê¾      http://localhost:5173
+echo     ï¿½ï¿½ï¿½ï¿½ API      http://localhost:8080
+echo     Nacos ï¿½ï¿½ï¿½ï¿½Ì¨  http://localhost:8848/nacos  ï¿½Ëºï¿½ nacos/nacos
+echo   Í£Ö¹ï¿½ï¿½Ë«ï¿½ï¿½ docker-down.cmdï¿½ï¿½ï¿½ï¿½ï¿½Ý±ï¿½ï¿½ï¿½ï¿½ï¿½
 echo ================================================
 docker compose ps
 echo.
