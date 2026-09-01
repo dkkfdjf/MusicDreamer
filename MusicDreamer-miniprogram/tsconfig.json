@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "removeComments": true,
+    "typeRoots": ["./typings"],
+    "lib": ["ES2020"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,36 @@
+/* 设计令牌：与网页端 RhythmoTune Daylight 同源 */
+page {
+  --bg: #f1eee8;
+  --card: #fffefa;
+  --brand: #ff6b1a;
+  --cyan: #0699b8;
+  --text: #3d3a35;
+  --text-sub: #8a857c;
+  --line: #e7e2d8;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 28rpx;
+}
+
+/* 通用卡片 */
+.card {
+  background: var(--card);
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 16rpx rgba(93, 76, 60, 0.08);
+}
+
+.hairline { border-bottom: 1rpx solid var(--line); }
+.ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* 品牌渐变按钮 */
+.btn-brand {
+  background: linear-gradient(135deg, #ff6b1a, #e11d92);
+  color: #fff;
+  border-radius: 16rpx;
+  font-weight: 600;
+}
+.btn-brand[disabled] { opacity: 0.5; }
+
+/* 去掉 button 默认样式干扰 */
+button { padding: 0; margin: 0; }
+button::after { border: none; }

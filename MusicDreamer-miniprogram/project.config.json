@@ -1,0 +1,17 @@
+{
+  "description": "MusicDreamer 悦享音乐小程序",
+  "packOptions": { "ignore": [], "include": [] },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "useCompilerPlugins": ["typescript"]
+  },
+  "compileType": "miniprogram",
+  "libVersion": "2.33.0",
+  "appid": "touristappid",
+  "projectname": "MusicDreamer-miniprogram",
+  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 }
+}
