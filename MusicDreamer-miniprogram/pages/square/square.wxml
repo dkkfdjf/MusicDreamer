@@ -1,1 +1,52 @@
-<view>占位页</view>
+<!-- pages/square/square.wxml -->
+<view class="sq">
+  <view class="sq-tabs">
+    <view class="sq-tab {{tab === 'songs' ? 'on' : ''}}" data-tab="songs" bindtap="switchTab">歌曲</view>
+    <view class="sq-tab {{tab === 'playlists' ? 'on' : ''}}" data-tab="playlists" bindtap="switchTab">歌单</view>
+    <view class="sq-tab {{tab === 'albums' ? 'on' : ''}}" data-tab="albums" bindtap="switchTab">专辑</view>
+  </view>
+
+  <view wx:if="{{tab === 'songs'}}" class="sq-songs">
+    <view class="sq-search card">
+      <view class="sq-search-icon">⌕</view>
+      <input class="sq-search-input" placeholder="搜歌名 / 歌手 / 专辑" placeholder-class="sq-ph" value="{{keyword}}"
+        bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
+      <view class="sq-search-btn" bindtap="onSearch">搜索</view>
+    </view>
+    <scroll-view scroll-x class="sq-styles" wx:if="{{styles.length}}">
+      <view class="sq-style {{curStyle === s ? 'on' : ''}}" wx:for="{{styles}}" wx:key="*this"
+        wx:for-item="s" data-style="{{s}}" bindtap="pickStyle">{{s}}</view>
+    </scroll-view>
+    <song-item wx:for="{{songs}}" wx:key="id" song="{{item}}" index="{{index}}" playing="{{item.id === curId}}"
+      list="{{songs}}" bindmore="onPlayMore" />
+    <view wx:if="{{!songs.length && !loading}}" class="sq-empty">换个关键词试试</view>
+    <view wx:if="{{loading}}" class="sq-more">加载中...</view>
+    <view wx:elif="{{songs.length >= songTotal && songs.length}}" class="sq-more">没有更多了</view>
+  </view>
+
+  <view wx:if="{{tab === 'playlists'}}" class="sq-lists">
+    <view class="pl-card card" wx:for="{{lists}}" wx:key="id" data-id="{{item.id}}" data-type="playlist" bindtap="onListTap">
+      <image class="pl-cover" src="{{item.coverUrl}}" mode="aspectFill" lazy-load="{{true}}" />
+      <view class="pl-main">
+        <view class="pl-name ellipsis">{{item.name}}</view>
+        <view class="pl-sub ellipsis">{{item.songCount}}首 · by {{item.creatorName || '佚名'}}</view>
+      </view>
+      <view class="pl-arrow">›</view>
+    </view>
+    <view wx:if="{{!lists.length && !loading}}" class="sq-empty">暂无公开歌单</view>
+  </view>
+
+  <view wx:if="{{tab === 'albums'}}" class="sq-lists">
+    <view class="pl-card card" wx:for="{{lists}}" wx:key="id" data-id="{{item.id}}" data-type="album" bindtap="onListTap">
+      <image class="pl-cover" src="{{item.coverUrl}}" mode="aspectFill" lazy-load="{{true}}" />
+      <view class="pl-main">
+        <view class="pl-name ellipsis">{{item.name}}</view>
+        <view class="pl-sub ellipsis">{{item.songCount}}首 · {{item.singerName || item.creatorName || '佚名'}}</view>
+      </view>
+      <view class="pl-arrow">›</view>
+    </view>
+    <view wx:if="{{!lists.length && !loading}}" class="sq-empty">暂无公开专辑</view>
+  </view>
+
+  <mini-player />
+</view>

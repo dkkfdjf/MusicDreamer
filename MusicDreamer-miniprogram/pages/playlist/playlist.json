@@ -1,1 +1,7 @@
-{ "usingComponents": {} }
+{
+  "navigationBarTitleText": "悦享音乐 · 歌单",
+  "usingComponents": {
+    "song-item": "/components/song-item/song-item",
+    "mini-player": "/components/mini-player/mini-player"
+  }
+}

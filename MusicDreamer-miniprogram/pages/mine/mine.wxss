@@ -1,0 +1,19 @@
+/* pages/mine/mine.wxss */
+.mn { padding: 40rpx 20rpx 220rpx; }
+.mn-login { text-align: center; padding: 80rpx 30rpx; }
+.mn-badge {
+  width: 120rpx; height: 120rpx; line-height: 120rpx;
+  margin: 0 auto 24rpx;
+  font-size: 64rpx; color: #fff;
+  background: linear-gradient(135deg, #ff6b1a, #e11d92);
+  border-radius: 36rpx;
+}
+.mn-tip { color: var(--text-sub); margin-bottom: 40rpx; }
+.mn-btn { width: 300rpx; }
+.mn-card { display: flex; align-items: center; padding: 40rpx 30rpx; }
+.mn-avatar { width: 120rpx; height: 120rpx; border-radius: 50%; background: var(--line); flex-shrink: 0; }
+.mn-info { margin-left: 24rpx; min-width: 0; }
+.mn-name { font-size: 36rpx; font-weight: 800; }
+.mn-role { font-size: 24rpx; color: var(--text-sub); margin-top: 8rpx; }
+.mn-actions { margin-top: 24rpx; padding: 10rpx; }
+.mn-logout { background: transparent; color: #d0453c; font-size: 28rpx; }

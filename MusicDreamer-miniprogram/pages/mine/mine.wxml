@@ -1,1 +1,20 @@
-<view>占位页</view>
+<!-- pages/mine/mine.wxml -->
+<view class="mn">
+  <view wx:if="{{!loggedIn}}" class="mn-login card">
+    <view class="mn-badge">♪</view>
+    <view class="mn-tip">登录悦享音乐，同步你的收藏与歌单</view>
+    <button class="btn-brand mn-btn" bindtap="goLogin">立即登录</button>
+  </view>
+
+  <view wx:else class="mn-card card">
+    <image class="mn-avatar" src="{{user.avatar}}" mode="aspectFill" />
+    <view class="mn-info">
+      <view class="mn-name ellipsis">{{user.nickname}}</view>
+      <view class="mn-role">{{roleText}} · {{user.username}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loggedIn}}" class="mn-actions card">
+    <button class="mn-logout" bindtap="onLogout">退出登录</button>
+  </view>
+</view>

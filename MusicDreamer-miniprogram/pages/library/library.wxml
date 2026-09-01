@@ -1,1 +1,57 @@
-<view>占位页</view>
+<!-- pages/library/library.wxml -->
+<view class="lb">
+  <view class="lb-tabs">
+    <view class="lb-tab {{tab === 'songs' ? 'on' : ''}}" data-tab="songs" bindtap="switchTab">收藏歌曲</view>
+    <view class="lb-tab {{tab === 'playlists' ? 'on' : ''}}" data-tab="playlists" bindtap="switchTab">我的歌单</view>
+    <view class="lb-tab {{tab === 'recent' ? 'on' : ''}}" data-tab="recent" bindtap="switchTab">最近播放</view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="lb-login">
+    <view class="lb-login-icon">♪</view>
+    <view class="lb-login-tip">登录后查看你的收藏、歌单和最近播放</view>
+    <button class="btn-brand lb-login-btn" bindtap="goLogin">去登录</button>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{tab === 'songs'}}">
+      <song-item wx:for="{{collects}}" wx:key="id" song="{{item}}" index="{{index}}" playing="{{item.id === curId}}"
+        list="{{collects}}" bindmore="onSongMore" />
+      <view wx:if="{{!collects.length}}" class="lb-empty">还没有收藏歌曲，去首页挑几首吧</view>
+    </view>
+
+    <view wx:if="{{tab === 'playlists'}}">
+      <button class="lb-create" bindtap="onCreatePlaylist">＋ 新建歌单</button>
+      <view class="lb-group" wx:if="{{created.length}}"><view class="lb-group-title">我创建的</view></view>
+      <view class="pl-card card" wx:for="{{created}}" wx:key="id" data-id="{{item.id}}" data-type="playlist" bindtap="onPlaylistTap">
+        <image class="pl-cover" src="{{item.coverUrl}}" mode="aspectFill" />
+        <view class="pl-main">
+          <view class="pl-name ellipsis">{{item.name}}</view>
+          <view class="pl-sub">{{item.songCount}}首 · {{item.isPublic ? '公开' : '私有'}}</view>
+        </view>
+        <view class="lb-del" data-id="{{item.id}}" catchtap="deletePlaylist">删除</view>
+      </view>
+      <view class="lb-group" wx:if="{{favorited.length}}"><view class="lb-group-title">我收藏的</view></view>
+      <view class="pl-card card" wx:for="{{favorited}}" wx:key="id" data-id="{{item.id}}" data-type="playlist" bindtap="onPlaylistTap">
+        <image class="pl-cover" src="{{item.coverUrl}}" mode="aspectFill" />
+        <view class="pl-main">
+          <view class="pl-name ellipsis">{{item.name}}</view>
+          <view class="pl-sub">{{item.songCount}}首 · by {{item.creatorName || '佚名'}}</view>
+        </view>
+      </view>
+      <view wx:if="{{!created.length && !favorited.length}}" class="lb-empty">还没有歌单，点上面新建一个</view>
+    </view>
+
+    <view wx:if="{{tab === 'recent'}}">
+      <view class="lb-recent card" wx:for="{{recents}}" wx:key="songId" data-index="{{index}}" bindtap="playRecent">
+        <image class="pl-cover" src="{{item.coverUrl}}" mode="aspectFill" />
+        <view class="pl-main">
+          <view class="pl-name ellipsis {{item.songId === curId ? 'on' : ''}}">{{item.name}}</view>
+          <view class="pl-sub ellipsis">{{item.singer}} · {{item.durText}}</view>
+        </view>
+      </view>
+      <view wx:if="{{!recents.length}}" class="lb-empty">还没有播放记录</view>
+    </view>
+  </block>
+
+  <mini-player />
+</view>

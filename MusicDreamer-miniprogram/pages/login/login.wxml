@@ -1,1 +1,26 @@
-<view>占位页</view>
+<!-- pages/login/login.wxml -->
+<view class="lg">
+  <view class="lg-logo">
+    <view class="lg-badge">♪</view>
+    <view class="lg-title">悦享音乐</view>
+    <view class="lg-sub">MusicDreamer · 遇见每一首好歌</view>
+  </view>
+
+  <view class="lg-tabs">
+    <view class="lg-tab {{mode === 'login' ? 'on' : ''}}" data-mode="login" bindtap="switchMode">登录</view>
+    <view class="lg-tab {{mode === 'register' ? 'on' : ''}}" data-mode="register" bindtap="switchMode">注册</view>
+    <view class="lg-tab {{mode === 'reset' ? 'on' : ''}}" data-mode="reset" bindtap="switchMode">找回密码</view>
+  </view>
+
+  <view class="lg-form card">
+    <input class="lg-input" placeholder="用户名" placeholder-class="lg-ph" value="{{username}}" data-field="username" bindinput="onField" />
+    <input wx:if="{{mode === 'register'}}" class="lg-input" placeholder="昵称" placeholder-class="lg-ph" value="{{nickname}}" data-field="nickname" bindinput="onField" />
+    <input wx:if="{{mode === 'register' || mode === 'reset'}}" class="lg-input" placeholder="注册邮箱" placeholder-class="lg-ph" value="{{email}}" data-field="email" bindinput="onField" />
+    <input wx:if="{{mode !== 'reset'}}" class="lg-input" password placeholder="密码" placeholder-class="lg-ph" value="{{password}}" data-field="password" bindinput="onField" />
+    <input wx:if="{{mode === 'reset'}}" class="lg-input" password placeholder="新密码" placeholder-class="lg-ph" value="{{newPassword}}" data-field="newPassword" bindinput="onField" />
+    <button class="btn-brand lg-btn" loading="{{loading}}" bindtap="submit">
+      {{mode === 'login' ? '登录' : mode === 'register' ? '注册' : '重置密码'}}
+    </button>
+    <view wx:if="{{mode === 'register'}}" class="lg-note">注册后需到邮箱点击激活链接</view>
+  </view>
+</view>

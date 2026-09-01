@@ -1,0 +1,25 @@
+/* pages/library/library.wxss */
+.lb { padding: 20rpx 20rpx 220rpx; }
+.lb-tabs { display: flex; margin-bottom: 24rpx; }
+.lb-tab { flex: 1; text-align: center; padding: 18rpx 0; color: var(--text-sub); border-bottom: 4rpx solid transparent; }
+.lb-tab.on { color: var(--brand); border-color: var(--brand); font-weight: 700; }
+.lb-login { text-align: center; padding: 120rpx 0; }
+.lb-login-icon { font-size: 100rpx; color: var(--line); margin-bottom: 20rpx; }
+.lb-login-tip { color: var(--text-sub); margin-bottom: 40rpx; }
+.lb-login-btn { width: 300rpx; }
+.lb-empty { text-align: center; color: var(--text-sub); padding: 80rpx 0; }
+.lb-create {
+  height: 84rpx; line-height: 84rpx;
+  background: var(--card); color: var(--brand); font-weight: 700;
+  border-radius: 20rpx; margin-bottom: 24rpx; font-size: 28rpx;
+  box-shadow: 0 4rpx 16rpx rgba(93, 76, 60, 0.08);
+}
+.lb-group-title { font-size: 26rpx; color: var(--text-sub); margin: 24rpx 8rpx 16rpx; }
+.lb-del { color: #d0453c; font-size: 24rpx; padding: 12rpx; flex-shrink: 0; }
+.pl-card { display: flex; align-items: center; padding: 16rpx 20rpx; margin-bottom: 16rpx; }
+.pl-cover { width: 96rpx; height: 96rpx; border-radius: 12rpx; background: var(--line); flex-shrink: 0; }
+.pl-main { flex: 1; min-width: 0; margin-left: 20rpx; }
+.pl-name { font-size: 30rpx; font-weight: 600; }
+.pl-name.on { color: var(--brand); }
+.pl-sub { font-size: 24rpx; color: var(--text-sub); margin-top: 4rpx; }
+.lb-recent { display: flex; align-items: center; padding: 16rpx 20rpx; margin-bottom: 16rpx; }

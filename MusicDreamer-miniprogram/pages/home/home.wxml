@@ -1,1 +1,31 @@
-<view>占位页</view>
+<!-- pages/home/home.wxml -->
+<view class="home">
+  <!-- 顶部横幅：未登录引导 / 品牌语 -->
+  <view class="hero">
+    <view class="hero-title">今天想听点什么？</view>
+    <view class="hero-sub">{{loggedIn ? '收藏喜欢的歌，推荐会越来越懂你' : '登录后可收藏歌曲、同步歌单'}}</view>
+    <button wx:if="{{!loggedIn}}" class="hero-btn" bindtap="goLogin">去登录</button>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+  <view wx:for="{{sections}}" wx:key="key" wx:for-item="sec" class="sec">
+    <view class="sec-head">
+      <view class="sec-title">{{sec.title}}</view>
+      <view class="sec-desc">{{sec.desc}}</view>
+    </view>
+    <song-item
+      wx:for="{{sec.songs}}"
+      wx:key="id"
+      wx:for-item="song"
+      song="{{song}}"
+      index="{{index}}"
+      playing="{{song.id === curId}}"
+      list="{{sec.songs}}"
+      bindmore="onMore"
+    />
+    <view wx:if="{{!sec.songs.length}}" class="sec-empty">暂无内容</view>
+  </view>
+
+  <mini-player />
+</view>

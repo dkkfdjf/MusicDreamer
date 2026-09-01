@@ -1,1 +1,50 @@
-<view>占位页</view>
+<!-- pages/playlist/playlist.wxml -->
+<view class="pd" wx:if="{{detail}}">
+  <view class="pd-head card">
+    <image class="pd-cover" src="{{detail.coverUrl}}" mode="aspectFill" />
+    <view class="pd-info">
+      <view class="pd-name">{{detail.name}}</view>
+      <view class="pd-sub">{{detail.isPublic ? '公开' : '私有'}} · {{songs.length}}首 · {{detail.creatorName || '佚名'}}</view>
+      <view class="pd-desc ellipsis2">{{detail.description || (type === 'album' ? '专辑' : '歌单')}}</view>
+    </view>
+  </view>
+
+  <view class="pd-actions">
+    <button class="btn-brand pd-play" bindtap="playAll">▶ 播放全部</button>
+    <button class="pd-fav {{detail.favored ? 'on' : ''}}" bindtap="toggleFav">{{detail.favored ? '♥' : '♡'}}</button>
+    <button wx:if="{{isOwner}}" class="pd-fav" bindtap="openAdd">＋</button>
+    <button wx:if="{{isOwner}}" class="pd-del" bindtap="removeList">删除</button>
+  </view>
+
+  <view class="pd-songs">
+    <block wx:for="{{songs}}" wx:key="id">
+      <view class="pd-songrow">
+        <song-item song="{{item}}" index="{{index}}" playing="{{item.id === curId}}" list="{{songs}}" bindmore="onSongMore" />
+        <view wx:if="{{isOwner}}" class="pd-rm" data-id="{{item.id}}" catchtap="removeSong">移除</view>
+      </view>
+    </block>
+    <view wx:if="{{!songs.length}}" class="pd-empty">还没有歌曲{{isOwner ? '，点右上「＋」添加' : ''}}</view>
+  </view>
+
+  <!-- 半屏加歌弹层 -->
+  <view wx:if="{{addShow}}" class="pd-mask" bindtap="closeAdd">
+    <view class="pd-add" catchtap="noop">
+      <view class="pd-add-title">添加歌曲到{{type === 'album' ? '专辑' : '歌单'}}</view>
+      <view class="pd-add-search">
+        <input class="pd-add-input" placeholder="搜索歌名" placeholder-class="pd-ph" value="{{addKw}}" bindinput="onAddKw"
+          bindconfirm="doAddSearch" confirm-type="search" />
+        <view class="pd-add-btn" bindtap="doAddSearch">搜索</view>
+      </view>
+      <scroll-view scroll-y class="pd-add-list">
+        <view class="pd-add-item hairline" wx:for="{{addResults}}" wx:key="id" data-song="{{item}}" bindtap="addSong">
+          <view class="ellipsis">{{item.name}}</view>
+          <view class="pd-add-singer ellipsis">{{item.singer}}</view>
+        </view>
+        <view wx:if="{{!addResults.length}}" class="pd-empty">输入关键词搜索歌曲</view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <mini-player />
+</view>
+<view wx:else class="pd-loading">加载中...</view>

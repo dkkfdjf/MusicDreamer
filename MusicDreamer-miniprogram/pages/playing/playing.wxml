@@ -1,1 +1,43 @@
-<view>占位页</view>
+<!-- pages/playing/playing.wxml -->
+<view class="py" wx:if="{{cur}}">
+  <view class="py-tabs">
+    <view class="py-tab {{tab === 'cover' ? 'on' : ''}}" data-tab="cover" bindtap="switchTab">封面</view>
+    <view class="py-tab {{tab === 'lyric' ? 'on' : ''}}" data-tab="lyric" bindtap="switchTab">歌词</view>
+  </view>
+
+  <view wx:if="{{tab === 'cover'}}" class="py-cover-wrap">
+    <view class="py-disc">
+      <image class="py-cover {{playing ? 'spin' : ''}}" src="{{cover}}" mode="aspectFill" />
+    </view>
+  </view>
+  <scroll-view wx:else scroll-y class="py-lyrics" scroll-into-view="lyric-{{lyricIndex}}" scroll-with-animation>
+    <view wx:if="{{!lyrics.length}}" class="py-empty">暂无歌词</view>
+    <view wx:for="{{lyrics}}" wx:key="index" id="lyric-{{index}}"
+      class="py-line {{index === lyricIndex ? 'on' : ''}}">{{item.text}}</view>
+    <view class="py-pad"></view>
+  </scroll-view>
+
+  <view class="py-name ellipsis">{{cur.name}}</view>
+  <view class="py-singer ellipsis">{{cur.singer}}</view>
+
+  <view class="py-progress">
+    <text class="py-time">{{posText}}</text>
+    <slider class="py-slider" min="0" max="{{duration || 1}}" value="{{position}}" activeColor="#ff6b1a"
+      backgroundColor="#e7e2d8" block-size="16" bindchange="onDragEnd" bindchanging="onDragging" />
+    <text class="py-time">{{durText}}</text>
+  </view>
+
+  <view class="py-controls">
+    <view class="py-ctl py-side" bindtap="onMode" aria-label="{{modeText}}">{{mode === 'order' ? '🔁' : mode === 'single' ? '🔂' : '🔀'}}</view>
+    <view class="py-ctl py-side {{collected ? 'fav-on' : ''}}" bindtap="onCollect">{{collected ? '♥' : '♡'}}</view>
+    <view class="py-ctl py-main" bindtap="onPrev">⏮</view>
+    <view class="py-play" bindtap="onToggle">{{playing ? '⏸' : '▶'}}</view>
+    <view class="py-ctl py-main" bindtap="onNext">⏭</view>
+    <view class="py-ctl py-side py-mode-text" bindtap="onMode">{{modeText}}</view>
+  </view>
+</view>
+<view wx:else class="py-none">
+  <view class="py-none-icon">♪</view>
+  <view>还没有播放歌曲，去首页点一首吧</view>
+  <button class="btn-brand py-none-btn" bindtap="goHome">去首页</button>
+</view>
