@@ -1,0 +1,38 @@
+[api 200] GET /src/api/index.js → // 统一 API 封装：axios 实例 + 拦截器 + 全部后端接口
+// 响应统一 { code, message, data, timestamp }，code=0 成功；拦截器直接返回 data
+import axios from "/node_modules/.vite/deps/axios.js?v=0b2860a2"
+import { ElMessage } from "/node_modules/.vite/deps/element-plus.js?v=0b2860a2"
+
+const BASE = '/api/v1'
+export const TOKEN_KEY
+[console.debug] [vite] connecting...
+[console.debug] [vite] connected.
+[console.verbose] [DOM] Password field is not contained in a form: (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o
+[console.verbose] [DOM] Password field is not contained in a form: (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o
+[api 200] POST /api/v1/user/login → {"code":0,"message":"success","data":{"token":"eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWRtaW4iLCJyb2xlIjoyLCJpYXQiOjE3ODgyNDcxNjgsImV4cCI6MTc4ODMzMzU2OH0.SC27b2aW9jcpG4Sh8HA28EDcha1Jv0C1UV53GbX946Y","userId":1,"nickname":"系统管理员","avatar":null,"role":2},"timestamp":1788247168074,"path":
+[api 200] GET /api/v1/user/info → {"code":0,"message":"success","data":{"id":1,"username":"admin","email":"admin@musicdream.com","nickname":"系统管理员","avatar":null,"role":2,"singerStatus":0,"status":1,"createTime":"2026-08-24T10:08:46"},"timestamp":1788247168102,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/collect/ids → {"code":0,"message":"success","data":[11,7,9,6],"timestamp":1788247168133,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/recommend/list?limit=60 → {"code":0,"message":"success","data":[{"id":8,"name":"【4K极致修复丨Hi-Res无损】周杰伦 - 听妈妈的话 MV 2160P 歌词重制","singer":"周杰伦","singerId":4,"album":"","style":"","duration":265,"coverUrl":"/data/image/【4K极致修复丨Hi-Res无损】周杰伦 - 听妈妈的话 MV 2160P 歌词重制.jpg","playCount":6,"weekPlayCount":null,"score":null},{"id":6,"name":"
+[api 200] GET /api/v1/playlist/my → {"code":0,"message":"success","data":{"created":[{"id":4,"userId":1,"name":"777","description":"dsfdsfdsfds","coverUrl":null,"isPublic":true,"createTime":"2026-08-24T20:28:39","songCount":1,"favoriteTime":null,"creatorName":null},{"id":3,"userId":1,"name":"re","description":"uuuududuudud","coverUrl"
+[api 200] GET /api/v1/playlist/my → {"code":0,"message":"success","data":{"created":[{"id":4,"userId":1,"name":"777","description":"dsfdsfdsfds","coverUrl":null,"isPublic":true,"createTime":"2026-08-24T20:28:39","songCount":1,"favoriteTime":null,"creatorName":null},{"id":3,"userId":1,"name":"re","description":"uuuududuudud","coverUrl"
+[console.debug] [vite] connecting...
+[console.debug] [vite] connected.
+[api 304] GET /src/api/index.js → <no body>
+[api 200] GET /api/v1/user/info → {"code":0,"message":"success","data":{"id":1,"username":"admin","email":"admin@musicdream.com","nickname":"系统管理员","avatar":null,"role":2,"singerStatus":0,"status":1,"createTime":"2026-08-24T10:08:46"},"timestamp":1788247170655,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/media/tasks/active → {"code":0,"message":"success","data":[],"timestamp":1788247170658,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/collect/ids → {"code":0,"message":"success","data":[11,7,9,6],"timestamp":1788247170672,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/playlist/my → {"code":0,"message":"success","data":{"created":[{"id":4,"userId":1,"name":"777","description":"dsfdsfdsfds","coverUrl":null,"isPublic":true,"createTime":"2026-08-24T20:28:39","songCount":1,"favoriteTime":null,"creatorName":null},{"id":3,"userId":1,"name":"re","description":"uuuududuudud","coverUrl"
+[api 200] GET /api/v1/song/admin/list?status=1&page=1&size=50 → {"code":0,"message":"success","data":{"total":0,"songs":[],"totalPlays":0},"timestamp":1788247170751,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/user/list?page=1&size=100 → {"code":0,"message":"success","data":{"total":4,"size":100,"page":1,"list":[{"id":4,"username":"singer2","email":"3439237081@qq.com","nickname":"singer2","avatar":null,"role":1,"singerStatus":2,"status":1,"createTime":"2026-08-24T16:30:48"},{"id":3,"username":"user1","email":"user1@musicdream.com","
+[api 200] GET /api/v1/media/requests → {"code":0,"message":"success","data":[{"id":1,"userId":2,"title":"七里香","artist":"周杰伦","coverUrl":null,"source":0,"status":0,"resultSongId":null,"rejectReason":null,"handledBy":null,"createdAt":"2026-09-01T06:40:02","handledAt":null}],"timestamp":1788247172273,"path":null,"method":null,"ok":true}
+--- 搜索入库 clicked, waiting bilisearch...
+[console.info] Images loaded lazily and replaced with placeholders. Load events are deferred. See https://go.microsoft.com/fwlink/?linkid=2048113
+[api 200] GET /api/v1/media/recognize/search?kw=%E4%B8%83%E9%87%8C%E9%A6%99+%E5%91%A8%E6%9D%B0%E4%BC%A6 → {"code":0,"message":"success","data":[{"url":"http://www.bilibili.com/video/av711629313","title":"【4K60FPS】周杰伦《七里香》封神之作！华语乐坛最美的一首歌","duration":297.428,"tooLong":false,"uploader":"音乐私藏馆","cover":"http://i1.hdslb.com/bfs/archive/e31b53d89a624c49f7f7056a9556f10d21de4c2b.jpg"},{"url":"http://www.bilibil
+--- candidate cards: 5
+--- instrumentation ready
+--- after card click: dialogs=1
+--- 开始下载 clicked
+[api 200] POST /api/v1/media/requests/1/download → {"code":0,"message":"success","data":{"missingSinger":"周杰伦"},"timestamp":1788247186676,"path":null,"method":null,"ok":true}
+--- +800ms: {"dialogs":0,"dialogVisible":[],"elMessages":0,"weuiToasts":0,"ev":{"confirmCalls":[],"dialogs":["added@85546","removed@86956"],"errors":[]}}
+--- +1200ms: {"dialogs":0,"dialogVisible":[],"elMessages":0,"weuiToasts":0,"ev":{"confirmCalls":[],"dialogs":["added@85546","removed@86956"],"errors":[]}}
+--- +2000ms: {"dialogs":0,"dialogVisible":[],"elMessages":0,"weuiToasts":0,"ev":{"confirmCalls":[],"dialogs":["added@85546","removed@86956"],"errors":[]}}

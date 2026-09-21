@@ -1,0 +1,16 @@
+[console.debug] [vite] connecting...
+[console.debug] [vite] connected.
+[console.verbose] [DOM] Password field is not contained in a form: (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o
+[console.verbose] [DOM] Password field is not contained in a form: (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o
+--- logged in, url: http://localhost:5173/
+[console.debug] [vite] connecting...
+[console.debug] [vite] connected.
+--- requests tab opened, rows: 5
+--- clicked 搜索入库, waiting for drawer + bilisearch...
+[console.info] Images loaded lazily and replaced with placeholders. Load events are deferred. See https://go.microsoft.com/fwlink/?linkid=2048113
+--- candidate cards: 5
+--- clicked candidate card
+--- weui-dialog count after click: 1
+--- dialog text: 下载入库 | 将下载《【4K60FPS】周杰伦《七里香》封神之作！华语乐坛最美的一首歌》的音频并入库，完成后自动回填求歌状态。歌名等信息之后可在「全量歌曲」里编辑。 | 取消 | 开始下载
+--- clicked 开始下载
+=== ALL CONSOLE/NETWORK LOGS ===

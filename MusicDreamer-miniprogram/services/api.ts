@@ -1,5 +1,5 @@
 // 统一请求层：Promise 化 wx.request；code===0 解包 data；2006/401 清登录态回登录页
-import { BASE_URL } from '../config'
+import { BASE_URL, resolveUrlsDeep } from '../config'
 import { auth } from './auth'
 
 // ---------- 数据类型（与后端 VO 一一对应） ----------
@@ -112,7 +112,7 @@ function request(method: string, path: string, data?: any, silent = false): Prom
       success: (res: any) => {
         const body = res.data as RawRes
         if (body && typeof body === 'object' && 'code' in body) {
-          if (body.code === 0) return resolve(body.data)
+          if (body.code === 0) return resolve(resolveUrlsDeep(body.data))
           // 登录过期：清态回登录页（silent 请求不弹提示，避免连环 toast）
           if (body.code === 2006) {
             auth.clear()

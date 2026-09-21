@@ -8,3 +8,18 @@ export function resolveUrl(url?: string | null): string {
   if (/^https?:\/\//.test(url)) return url
   return STATIC_BASE + url
 }
+
+/** 递归补全对象/数组里所有 *Url 字段的相对路径（对已完整 URL 幂等；depth 防循环引用） */
+export function resolveUrlsDeep(v: any, depth = 0): any {
+  if (v == null || typeof v !== 'object' || depth > 4) return v
+  if (Array.isArray(v)) {
+    v.forEach((x, i) => (v[i] = resolveUrlsDeep(x, depth + 1)))
+    return v
+  }
+  for (const k of Object.keys(v)) {
+    const val = v[k]
+    if (typeof val === 'string' && /Url$/.test(k)) v[k] = resolveUrl(val)
+    else resolveUrlsDeep(val, depth + 1)
+  }
+  return v
+}

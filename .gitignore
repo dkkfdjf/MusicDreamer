@@ -1,0 +1,30 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.local
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 日志与系统文件
+*.log
+hs_err_pid*.log
+.DS_Store
+Thumbs.db
+
+# 微信开发者工具私人配置
+MusicDreamer-miniprogram/project.private.config.json
+
+# 后端本地大文件（tools/data 由内层 .gitignore 管理，此处兜底）
+MusicDreamer-backend/tools/
+MusicDreamer-backend/data/
+MusicDreamer-backend/.idea/
+MusicDreamer-backend/.playwright-cli/
+**/target/

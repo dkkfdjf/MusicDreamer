@@ -1,0 +1,37 @@
+[api 200] GET /src/api/index.js → // 统一 API 封装：axios 实例 + 拦截器 + 全部后端接口
+// 响应统一 { code, message, data, timestamp }，code=0 成功；拦截器直接返回 data
+import axios from "/node_modules/.vite/deps/axios.js?v=0b2860a2"
+import { ElMessage } from "/node_modules/.vite/de
+[api 200] POST /api/v1/user/login → {"code":0,"message":"success","data":{"token":"eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWRtaW4iLCJyb2xlIjoyLCJpYXQiOjE3ODgyNjI3NzgsImV4cCI6MTc4ODM0OTE3OH0.IAiO-O-5ynJyOS7K3AvwHbWzfwIFGIciEEWzRdi_V5s","userId
+[api 200] GET /api/v1/user/info → {"code":0,"message":"success","data":{"id":1,"username":"admin","email":"admin@musicdream.com","nickname":"系统管理员","avatar":null,"role":2,"singerStatus":0,"status":1,"createTime":"2026-08-24T10:08:46"},"timestamp":1788262
+[api 200] GET /api/v1/collect/ids → {"code":0,"message":"success","data":[11,7,9,6],"timestamp":1788262778104,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/recommend/list?limit=60 → {"code":0,"message":"success","data":[{"id":7,"name":"【4K60FPS】周杰伦《七里香》封神之作！华语乐坛最美的一首歌","singer":"周杰伦","singerId":4,"album":"","style":"","duration":297,"coverUrl":"/data/image/【4K60FPS】周杰伦《七里香》封神之作！华语乐坛最美的一首歌.jpg","play
+[api 200] GET /api/v1/playlist/my → {"code":0,"message":"success","data":{"created":[{"id":4,"userId":1,"name":"777","description":"dsfdsfdsfds","coverUrl":null,"isPublic":true,"createTime":"2026-08-24T20:28:39","songCount":1,"favoriteTime":null,"creatorNa
+[api 200] GET /api/v1/playlist/my → {"code":0,"message":"success","data":{"created":[{"id":4,"userId":1,"name":"777","description":"dsfdsfdsfds","coverUrl":null,"isPublic":true,"createTime":"2026-08-24T20:28:39","songCount":1,"favoriteTime":null,"creatorNa
+[api 200] GET /src/api/index.js → // 统一 API 封装：axios 实例 + 拦截器 + 全部后端接口
+// 响应统一 { code, message, data, timestamp }，code=0 成功；拦截器直接返回 data
+import axios from "/node_modules/.vite/deps/axios.js?v=0b2860a2"
+import { ElMessage } from "/node_modules/.vite/de
+[api 200] GET /api/v1/user/info → {"code":0,"message":"success","data":{"id":1,"username":"admin","email":"admin@musicdream.com","nickname":"系统管理员","avatar":null,"role":2,"singerStatus":0,"status":1,"createTime":"2026-08-24T10:08:46"},"timestamp":1788262
+[api 200] GET /api/v1/media/tasks/active → {"code":0,"message":"success","data":[],"timestamp":1788262780610,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/playlist/my → {"code":0,"message":"success","data":{"created":[{"id":4,"userId":1,"name":"777","description":"dsfdsfdsfds","coverUrl":null,"isPublic":true,"createTime":"2026-08-24T20:28:39","songCount":1,"favoriteTime":null,"creatorNa
+[api 200] GET /api/v1/collect/ids → {"code":0,"message":"success","data":[11,7,9,6],"timestamp":1788262780615,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/song/admin/list?status=1&page=1&size=50 → {"code":0,"message":"success","data":{"total":0,"songs":[],"totalPlays":0},"timestamp":1788262780702,"path":null,"method":null,"ok":true}
+[api 200] GET /api/v1/user/list?page=1&size=100 → {"code":0,"message":"success","data":{"total":4,"size":100,"page":1,"list":[{"id":4,"username":"singer2","email":"3439237081@qq.com","nickname":"singer2","avatar":null,"role":1,"singerStatus":2,"status":1,"createTime":"2
+[api 200] GET /api/v1/media/requests → {"code":0,"message":"success","data":[{"id":1,"userId":2,"title":"七里香","artist":"周杰伦","coverUrl":null,"source":0,"status":0,"resultSongId":null,"rejectReason":null,"handledBy":null,"createdAt":"2026-09-01T06:40:02","hand
+--- 搜索入库 clicked, waiting bilisearch...
+[api 200] GET /api/v1/media/recognize/search?kw=%E4%B8%83%E9%87%8C%E9%A6%99+%E5%91%A8%E6%9D%B0%E4%BC%A6 → {"code":0,"message":"success","data":[{"url":"http://www.bilibili.com/video/av114943022079793","title":"【\uD835\uDC07\uD835\uDC22-\uD835\uDC11\uD835\uDC1E\uD835\uDC2C无损音质】｜《七里香》- 周杰伦 -‘秋刀鱼的滋味猫跟你都想了解’","duration":299.2,"t
+--- candidate cards: 5
+--- first confirm shown (下载入库)
+--- 开始下载 clicked, waiting 创建歌手账号 dialog...
+[api 200] POST /api/v1/media/requests/1/download → {"code":0,"message":"success","data":{"missingSinger":"周杰伦"},"timestamp":1788262796109,"path":null,"method":null,"ok":true}
+--- ✓ second confirm shown (创建歌手账号) —— bug fixed
+--- 创建并继续 clicked
+[api 200] POST /api/v1/user/ensure-singer → {"code":0,"message":"success","data":{"created":false,"userId":5,"username":"zhoujielun"},"timestamp":1788262797097,"path":null,"method":null,"ok":true}
+[api 200] POST /api/v1/media/requests/1/download → {"code":0,"message":"success","data":{"missingSinger":"周杰伦"},"timestamp":1788262797111,"path":null,"method":null,"ok":true}
+[console.error] Failed to load resource: the server responded with a status of 400 (Bad Request)
+[api 400] GET /api/v1/media/task/undefined → {"code":5002,"message":"参数格式错误","data":null,"timestamp":1788262798656,"path":null,"method":null,"ok":false}
+[console.error] Failed to load resource: the server responded with a status of 400 (Bad Request)
+[api 400] GET /api/v1/media/task/undefined → {"code":5002,"message":"参数格式错误","data":null,"timestamp":1788262800129,"path":null,"method":null,"ok":false}
+[console.error] Failed to load resource: the server responded with a status of 400 (Bad Request)
+[api 400] GET /api/v1/media/task/undefined → {"code":5002,"message":"参数格式错误","data":null,"timestamp":1788262801626,"path":null,"method":null,"ok":false}

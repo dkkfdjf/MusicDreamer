@@ -1,17 +1,41 @@
 {
   "description": "MusicDreamer 悦享音乐小程序",
-  "packOptions": { "ignore": [], "include": [] },
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
   "setting": {
     "urlCheck": false,
     "es6": true,
     "enhance": true,
     "postcss": true,
     "minified": true,
-    "useCompilerPlugins": ["typescript"]
+    "useCompilerPlugins": [
+      "typescript"
+    ],
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "condition": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
   },
   "compileType": "miniprogram",
   "libVersion": "2.33.0",
-  "appid": "touristappid",
+  "appid": "wxe062f66b591d8c11",
   "projectname": "MusicDreamer-miniprogram",
-  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 }
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "simulatorPluginLibVersion": {}
 }

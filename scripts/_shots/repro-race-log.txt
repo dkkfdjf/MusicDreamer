@@ -1,0 +1,4 @@
+step1 firstDialog=1
+step2 secondDialog=1 text=创建歌手账号|第二次确认框：歌手还没有账号，是否自动创建？|取消|创建并继续
+step3 p1=resolved p2=undefined
+step4 afterCreate dialogs=0 st={"p1":"resolved","p2":"resolved"}
