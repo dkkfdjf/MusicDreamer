@@ -1,0 +1,74 @@
+flowchart TB
+    subgraph client["客户端层"]
+        web["Web 前端<br/>Vue3 + Element Plus"]
+        mp["微信小程序"]
+    end
+
+    gw["Gateway 网关 8000<br/>路由转发 · JWT 鉴权 · 身份头清洗防伪造"]
+
+    subgraph services["微服务层 Spring Boot · OpenFeign"]
+        media["Mod_media 媒体服务 8010<br/>任务引擎 · 下载管线 · 歌词链路<br/>响度分析 · 指纹采集 · 求歌管理<br/>工具管理 · WS 进度推送"]
+        setting["Mod_setting 设置中心 8005<br/>代理 · cookies · whisper模型 · 响度目标"]
+        upload["Mod_upload 上传服务 8007<br/>audio / image / lyric 上传 + 静态资源"]
+        login["Mod_login 8001<br/>注册 / 登录 / JWT"]
+        music["Mod_music 8002<br/>歌曲 CRUD · 审核流"]
+        songlist["Mod_songList 8008<br/>歌单"]
+        like["Mod_like 8009<br/>收藏 / 点赞"]
+        login ~~~ music
+        music ~~~ songlist
+        songlist ~~~ like
+    end
+
+    nacos["Nacos 注册 / 配置中心"]
+    mysql[("MySQL<br/>media_task 任务表 · song_request 求歌表<br/>song 表：待审 / 歌词指针 / 响度")]
+    redis[("Redis<br/>缓存 · 故障可降级不阻断")]
+
+    subgraph ext["Mod_media 外部依赖 · ProcessExecutor 统一出口"]
+        ytdlp["yt-dlp<br/>下载 / 字幕 / 元数据"]
+        ffmpeg["ffmpeg<br/>转码 / 响度 / 预处理"]
+        whisper["whisper.cpp<br/>本地 AI 转写"]
+        lrclib["LRCLIB 在线词库"]
+        sites["B站 / YouTube 视频源"]
+        acr["ACRCloud 云识别"]
+        ytdlp ~~~ ffmpeg
+        ffmpeg ~~~ whisper
+        whisper ~~~ lrclib
+        lrclib ~~~ sites
+        sites ~~~ acr
+    end
+
+    subgraph store["存储卷 · 自动落盘"]
+        d1["music/ 音频"]
+        d2["lyric/ 歌词 .lrc"]
+        d3["image/ 封面"]
+        d4["models/ whisper 模型"]
+        d1 ~~~ d2
+        d2 ~~~ d3
+        d3 ~~~ d4
+    end
+
+    web --> gw
+    mp --> gw
+    gw --> media
+    gw --> setting
+    gw --> upload
+    gw --> login
+    gw --> music
+    gw --> songlist
+    gw --> like
+    services -.-> nacos
+    media --> mysql
+    music --> mysql
+    media --> redis
+    media --> ytdlp
+    media --> ffmpeg
+    media --> whisper
+    media --> lrclib
+    media --> sites
+    media --> acr
+    media --> d1
+    media --> d2
+    media --> d3
+    media --> d4
+    media -. "WebSocket ws/task/id 实时进度 / 取消" .-> web
+

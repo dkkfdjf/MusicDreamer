@@ -1,0 +1,64 @@
+flowchart LR
+    User(("普通用户"))
+    Admin(("管理员"))
+    LrcLib(("LRCLIB 词库"))
+    WhisperC(("whisper.cpp"))
+    Sites(("B站 / YouTube"))
+    Ffmpeg(("ffmpeg"))
+
+    subgraph sys["悦享音乐系统（成员A负责范围）"]
+        UC01(["提交求歌"])
+        UC02(["查看我的求歌<br/>处理结果标「新」"])
+        UC03(["粘贴链接导入歌曲"])
+        UC04(["解析预览<br/>歌名智能裁剪 / 时长"])
+        UC05(["查看任务进度（任务浮窗）"])
+        UC06(["取消任务"])
+        UC07(["审核歌曲：待审→上架"])
+        UC08(["求歌处理"])
+        UC09(["发起下载（带 reqid 标记）"])
+        UC10(["拒绝求歌"])
+        UC11(["手动回填求歌"])
+        UC12(["系统设置<br/>代理 / cookies / 模型 / 响度目标"])
+        UC13(["工具与模型管理"])
+        UC14(["下载转码管线<br/>yt-dlp → ffmpeg → 落盘"])
+        UC15(["入库待审"])
+        UC16(["指纹采集入库"])
+        UC17(["求歌自动回填"])
+        UC18(["歌词获取三级降级<br/>词库 → 字幕 → AI 转写"])
+        UC19(["时间轴校准 LyricAligner"])
+        UC20(["响度分析与回写"])
+        UC21(["WebSocket 进度推送"])
+    end
+
+    Admin -. 继承 .-> User
+
+    User --> UC01
+    User --> UC02
+    User --> UC03
+    User --> UC05
+    User --> UC06
+
+    Admin --> UC07
+    Admin --> UC08
+    Admin --> UC12
+    Admin --> UC13
+
+    UC04 -.->|"<<extend>> 提交前预览"| UC03
+    UC18 -.->|"<<extend>> 勾选自动获取歌词"| UC03
+    UC09 -.->|"<<include>>"| UC03
+    UC17 -.->|"<<include>> 入库成功自动回填"| UC09
+    UC08 --> UC09
+    UC08 --> UC10
+    UC08 --> UC11
+    UC03 -.->|"<<include>>"| UC14
+    UC14 -.->|"<<include>>"| UC15
+    UC14 -.->|"<<include>>"| UC16
+    UC14 -.->|"<<include>> 响度必做"| UC20
+    UC19 -.->|"<<extend>> 命中在线同步歌词时"| UC18
+    UC05 -.->|"<<include>>"| UC21
+
+    UC14 --> Sites
+    UC18 --> LrcLib
+    UC18 --> WhisperC
+    UC20 --> Ffmpeg
+

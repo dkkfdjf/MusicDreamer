@@ -1,0 +1,52 @@
+@startuml 04-歌词链路活动图
+' =====================================================================
+' 歌词链路活动图（简化版）：三级降级主干
+' 贴入 CodeArts Snap / 任意 PlantUML 渲染器即可生成图片
+' =====================================================================
+skinparam defaultTextAlignment center
+skinparam ActivityBackgroundColor #FDFDFD
+skinparam ActivityDiamondBackgroundColor #FFF7E6
+
+title 歌词链路活动图（三级降级：LRCLIB 词库 → 视频 CC 字幕 → whisper AI 转写）
+
+start
+:任务触发：导入勾选「自动获取歌词」或手动获取;
+:获取歌曲信息（歌名 / 歌手 / 时长）;
+
+partition "第 1 级：LRCLIB 在线词库" #E8F4FD {
+  if (词库命中?) then (是)
+    :LyricAligner 时间轴校准\n（在线歌词 × 本地快转写逐句对齐）;
+    :落盘 + 回写 → 成功;
+    stop
+  else (否)
+    :降级到第 2 级;
+  endif
+}
+
+partition "第 2 级：来源视频 CC 字幕" #FFF7E6 {
+  if (拿到字幕?) then (是)
+    :SRT / VTT 转 LRC;
+    :落盘 + 回写 → 成功;
+    stop
+  else (否)
+    :降级到第 3 级;
+  endif
+}
+
+partition "第 3 级：whisper 本地 AI 转写" #F0FFF0 {
+  if (whisper 与模型就绪?) then (是)
+    :AI 转写生成带时间轴 LRC;
+    :落盘 + 回写 → 成功;
+    stop
+  else (否)
+    :失败：请先在管理端下载模型;
+    stop
+  endif
+}
+
+legend right
+  「落盘 + 回写」= 繁→简 → 写入 {歌名}.lrc
+  → 回写 song.lyric_url（失败重试 3 次）
+  任务全程可取消（强杀外部进程）
+endlegend
+@enduml

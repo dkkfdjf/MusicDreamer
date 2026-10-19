@@ -5,6 +5,18 @@
 > 运行方式：本地 / 私有服务器 Docker Compose 部署
 > 技术栈：Spring Cloud Gateway · Nacos · OpenFeign · Spring Boot 3 · MySQL · Redis · JWT · Docker Compose · 微信小程序
 
+![系统架构](docs/diagrams/mermaid/01-系统架构图.png)
+
+## 亮点速览（技术点 → 代码位置）
+
+| 技术点 | 一句话说明 | 核心代码 |
+|---|---|---|
+| 听歌识曲（自研指纹） | 手写 FFT + 谱峰提取 + anchor-target 哈希 + 倒排索引 + 投票定位 | `Mod_media/service/FingerprintService.java` |
+| 媒体任务引擎 | DB 任务表状态机 + UPDATE 原子抢占，防多 worker 重复消费 | `Mod_media/service/TaskManager.java` |
+| 歌词逐句校准 | 在线歌词 × whisper 转写单调配对 + 时间窗防错配 + 偏移插值 | `Mod_media/job/LyricAligner.java` |
+| 识别入口 / 求歌闭环 | 本地指纹未命中降级 ACRCloud，结果预填求歌 | `Mod_media/controller/RecognizeController.java` |
+| 实时进度推送 | WebSocket 任务进度推送 | `Mod_media/ws/TaskWsHandler.java` |
+
 ## 核心特性
 
 ### 1. 微服务基座（1 网关 + 7 服务）
@@ -24,7 +36,7 @@
 PCM 解码 → STFT(手写 radix-2 FFT) → 谱峰提取(均值+1.2σ 自适应阈值)
        → anchor-target 指纹哈希 → 倒排索引入库 → 帧偏移投票定位
 ```
-- 实测：同曲 435 票 / 异曲 5 票；命中双门槛（票数 ≥25 且占比 ≥10%）
+- **实测：同曲 435 票 / 异曲 5 票**；命中双门槛（票数 ≥25 且占比 ≥10%）
 - 本地未命中才降级 ACRCloud 云识别（手写 HmacSHA1 签名），识别结果预填求歌闭环
 
 ### 4. AI 歌词链路（三级降级）
@@ -33,6 +45,10 @@ LRCLIB 在线词库 → 来源视频 CC 字幕 → whisper.cpp 本地转写
 ```
 - 在线歌词 × 本地转写**逐句校准**：单调配对 + 时间窗防副歌错配 + 分段偏移插值
 - 纯文本歌词区间 DP 配对拆句挂时间轴；LRC 解析 + 繁转简全链路
+
+歌词链路全流程：
+
+![歌词链路活动图](docs/diagrams/mermaid/04-歌词链路活动图.png)
 
 ## 架构
 
@@ -78,7 +94,7 @@ docker compose up -d     # 或直接使用 docker-compose.yml
 ├── MusicDreamer-frontend/       # Web 前端
 ├── MusicDreamer-miniprogram/    # 微信小程序端
 ├── scripts/                     # 运维脚本（Nacos 启停、Flyway 修复）
-└── docs/                        # 需求规格 / 详细设计 / 部署手册
+└── docs/                        # 需求规格 / 详细设计 / 部署手册 / 架构图
 ```
 
 ## 联系方式

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; background: #ffffff; display: flex; justify-content: center; }
+  #wrap { padding: 16px; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="d"></div></div>
+<script>
+function loadScript(srcs) {
+  return new Promise((res, rej) => {
+    const tryNext = i => {
+      if (i >= srcs.length) return rej(new Error('all cdn failed'));
+      const s = document.createElement('script');
+      s.src = srcs[i];
+      s.onload = res;
+      s.onerror = () => tryNext(i + 1);
+      document.head.appendChild(s);
+    };
+    tryNext(0);
+  });
+}
+const file = new URLSearchParams(location.search).get('d');
+window.__done = false;
+loadScript([
+  'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js',
+  'https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js'
+]).then(async () => {
+  mermaid.initialize({ startOnLoad: false, theme: 'default' });
+  const code = await (await fetch(file)).text();
+  const { svg } = await mermaid.render('g' + Date.now(), code);
+  document.getElementById('d').innerHTML = svg;
+  const svgEl = document.querySelector('#d svg');
+  let w = 0, h = 0;
+  const vb = svgEl.getAttribute('viewBox');
+  if (vb) { const p = vb.split(/\s+/); w = +p[2]; h = +p[3]; }
+  if (!w || !h) { const r = svgEl.getBoundingClientRect(); w = r.width; h = r.height; }
+  const s = Math.min(1, 3700 / w, 2000 / h);
+  svgEl.setAttribute('width', Math.round(w * s));
+  svgEl.setAttribute('height', Math.round(h * s));
+  svgEl.style.background = '#ffffff';
+  window.__done = true;
+}).catch(e => {
+  document.body.innerHTML = '<pre style="color:red">' + String(e) + '</pre>';
+  window.__done = true;
+  window.__err = String(e);
+});
+</script>
+</body>
+</html>

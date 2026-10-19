@@ -1,0 +1,69 @@
+@startwbs 02-功能模块图
+' =====================================================================
+' 成员A功能模块分解（WBS 树：后端三服务 + 前端四入口）
+' 贴入 CodeArts Snap / 任意 PlantUML 渲染器即可生成图片
+' =====================================================================
+skinparam defaultTextAlignment center
+
+title 悦享音乐 · 成员A 功能模块图（蓝色 = 成员A主责模块）
+
+* 成员A\n内容 intake 闭环
+** <back:#E8F4FD>后端（Spring Cloud 微服务）</back>
+*** <back:#ADD8E6>Mod_media 媒体服务 (8010)</back>
+**** 任务引擎 TaskManager
+***** DB 任务表状态机\nPENDING→RUNNING→SUCCESS/FAILED/CANCELLED
+***** UPDATE 条件原子抢占（防多 worker 重复消费）
+***** 进度 500ms 节流写库
+***** 下载单并发 · 其余任务并行
+***** 取消 cancelKey · 超时 destroyForcibly
+***** 重启自愈 SelfHealRunner
+**** 下载管线 DownloadJob
+***** 元数据 dump-json（412 重试 + buvid cookie）
+***** yt-dlp 下载音频+封面（进度 0-60）
+***** ffmpeg 转码 MP3 320k（进度 60-75）
+***** Feign 入库 status=1 待审\n（失败回 PENDING 重试 ≤3）
+***** 正式落位 music//image/ + 地址回写
+***** 歌名智能裁剪 smartTitle（书名号/修饰词过滤）
+***** B 站 412 两层防护
+**** 歌词链路 MediaJobs（三级降级）
+***** 第1级 LRCLIB 在线词库
+***** 第2级 来源视频 CC 字幕（SrtToLrc）
+***** 第3级 whisper.cpp 本地 AI 转写
+***** LyricAligner 时间轴校准\n单调配对+时间窗+分段偏移插值
+***** 繁→简 opencc · 回写重试 3 次
+**** 响度分析（EBU R128）
+***** ffmpeg ebur128 解析 LUFS
+***** 增益 = 目标 - 实测 → 回写 song 表
+**** 指纹采集 FingerprintService
+***** PCM→STFT(手写 FFT)→谱峰→anchor-target
+***** 倒排索引入库（识别用）
+**** 求歌管理 SongRequestController
+***** 提交求歌 / 我的求歌 / 求歌列表
+***** 拒绝 / 手动回填 / 发起下载 / 删除
+**** 工具管理 ToolsController + ToolsMgmtJob
+***** 工具状态 / 安装 / 更新 yt-dlp
+***** whisper 模型下载·切换·删除
+**** 进程执行器 ProcessExecutor
+***** 数组参数防注入 · 超时强杀 · stderr 守护线程
+**** WS 进度推送 TaskWsHandler
+***** ws://…/ws/task/{id}  PROGRESS/SUCCESS/…
+*** <back:#ADD8E6>Mod_setting 设置中心 (8005)</back>
+**** 键值配置读写 /all · /set/{key}
+**** 代理 · cookies · whisper 模型 · 响度目标
+*** <back:#ADD8E6>Mod_upload 上传服务 (8007)</back>
+**** audio / image / lyric 上传
+**** 静态资源对外服务
+** <back:#E8F4FD>前端（Vue3 + Element Plus）</back>
+*** <back:#ADD8E6>导入页 UploadView（链接导入 tab）</back>
+**** 粘贴链接（B站/YouTube，分享文案自动提取）
+**** 解析预览（智能裁剪歌名 + 时长）
+**** 自定义歌名 / 风格 / 自动获取歌词开关
+*** <back:#ADD8E6>任务浮窗 TaskFloat</back>
+**** 实时进度条（WebSocket）
+**** 任务取消（×按钮）
+*** <back:#ADD8E6>我的求歌（个人中心 + SongRequestDialog）</back>
+**** 提交求歌 · 处理结果标记「新」
+*** <back:#ADD8E6>管理页 AdminView</back>
+**** 求歌处理 tab（拒绝/回填/发起下载）
+**** 工具与模型 tab（状态/更新/模型管理）
+@endwbs

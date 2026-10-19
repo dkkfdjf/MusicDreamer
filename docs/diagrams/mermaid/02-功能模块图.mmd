@@ -1,0 +1,97 @@
+flowchart LR
+    root(("成员A<br/>内容 intake 闭环"))
+
+    be["后端<br/>Spring Cloud 微服务"]
+    fe["前端<br/>Vue3 + Element Plus"]
+
+    media["Mod_media 媒体服务 8010"]
+    setsvc["Mod_setting 设置中心 8005"]
+    uploadsvc["Mod_upload 上传服务 8007"]
+
+    tm["任务引擎 TaskManager"]
+    dl["下载管线 DownloadJob"]
+    ly["歌词链路 MediaJobs 三级降级"]
+    loud["响度分析 EBU R128"]
+    fp["指纹采集 FingerprintService"]
+    reqc["求歌管理 SongRequestController"]
+    toolc["工具管理 ToolsController"]
+    ws["WS 进度推送 TaskWsHandler"]
+    exec["进程执行器 ProcessExecutor"]
+
+    tm1["DB 任务表状态机<br/>PENDING→RUNNING→终态"]
+    tm2["UPDATE 条件原子抢占<br/>防多 worker 重复消费"]
+    tm3["进度 500ms 节流 · 下载单并发"]
+    tm4["取消 cancelKey · 超时强杀"]
+    tm5["重启自愈 SelfHealRunner"]
+
+    dl1["元数据 dump-json<br/>412 重试 + buvid cookie"]
+    dl2["yt-dlp 下载音频封面 0-60"]
+    dl3["ffmpeg 转码 MP3 320k 60-75"]
+    dl4["Feign 入库 status=1 待审<br/>失败回 PENDING 重试 ≤3"]
+    dl5["正式落位 music/ image/<br/>撞名加 -songId + 地址回写"]
+    dl6["歌名智能裁剪 smartTitle"]
+
+    ly1["第1级 LRCLIB 在线词库"]
+    ly2["第2级 来源视频 CC 字幕 SrtToLrc"]
+    ly3["第3级 whisper.cpp 本地 AI 转写"]
+    ly4["LyricAligner 时间轴校准<br/>单调配对+时间窗+分段偏移"]
+    ly5["繁→简 opencc · 回写重试 3 次"]
+
+    loud1["ffmpeg ebur128 解析 LUFS"]
+    loud2["增益 = 目标 - 实测 → 回写 song"]
+
+    fp1["PCM→STFT 手写FFT→谱峰→指纹哈希"]
+    fp2["倒排索引入库"]
+
+    req1["提交 / 我的求歌 / 列表"]
+    req2["拒绝 / 手动回填 / 发起下载 / 删除"]
+
+    tool1["工具状态 / 安装 / 更新 yt-dlp"]
+    tool2["whisper 模型下载·切换·删除"]
+
+    ws1["ws /ws/task/id<br/>PROGRESS / SUCCESS / FAILED"]
+
+    exec1["数组参数防注入<br/>超时 destroyForcibly · stderr 守护"]
+
+    set1["键值配置 /all · /set/key"]
+    set2["代理 · cookies · 模型 · 响度目标"]
+
+    up1["audio / image / lyric 上传"]
+    up2["静态资源对外服务"]
+
+    iv["导入页 UploadView 链接导入 tab"]
+    iv1["粘贴链接 B站 / YouTube"]
+    iv2["解析预览：智能裁剪歌名+时长"]
+    iv3["自定义歌名 / 风格 / 自动获取歌词开关"]
+
+    tf["任务浮窗 TaskFloat"]
+    tf1["实时进度条 WebSocket"]
+    tf2["任务取消按钮"]
+
+    mr["我的求歌：个人中心+SongRequestDialog"]
+    mr1["提交求歌 · 处理结果标「新」"]
+
+    av["管理页 AdminView"]
+    av1["求歌处理 tab：拒绝/回填/下载"]
+    av2["工具与模型 tab"]
+
+    root --> be & fe
+    be --> media & setsvc & uploadsvc
+    media --> tm & dl & ly & loud & fp & reqc & toolc & ws & exec
+    tm --> tm1 & tm2 & tm3 & tm4 & tm5
+    dl --> dl1 & dl2 & dl3 & dl4 & dl5 & dl6
+    ly --> ly1 & ly2 & ly3 & ly4 & ly5
+    loud --> loud1 & loud2
+    fp --> fp1 & fp2
+    reqc --> req1 & req2
+    toolc --> tool1 & tool2
+    ws --> ws1
+    exec --> exec1
+    setsvc --> set1 & set2
+    uploadsvc --> up1 & up2
+    fe --> iv & tf & mr & av
+    iv --> iv1 & iv2 & iv3
+    tf --> tf1 & tf2
+    mr --> mr1
+    av --> av1 & av2
+

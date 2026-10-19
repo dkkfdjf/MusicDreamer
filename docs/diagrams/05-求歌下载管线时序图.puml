@@ -1,0 +1,39 @@
+@startuml 05-求歌下载管线时序图
+' =====================================================================
+' 求歌/导入 下载管线时序图（简化版）：闭环主干
+' 贴入 CodeArts Snap / 任意 PlantUML 渲染器即可生成图片
+' =====================================================================
+autonumber
+skinparam responseMessageBelowArrow true
+
+title 求歌 / 链接导入 · 下载管线时序图（简化版）\n闭环：求歌 → 下载转码 → 入库待审 → 指纹 → 求歌回填 → 后置回写
+
+actor "用户 / 管理员" as U
+participant "前端\n导入页 / 求歌 / 任务浮窗" as FE
+participant "Mod_media\n任务引擎 + 下载管线" as M
+participant "外部进程\nyt-dlp / ffmpeg" as EXT
+participant "Mod_music\n歌曲库 + 求歌表" as DB
+
+== 求歌与导入 ==
+U -> FE : 提交求歌 / 粘贴链接导入
+FE -> M : 创建下载任务\n（求歌下载带 reqid 标记）
+
+== 下载管线 ==
+M -> EXT : 元数据 → 下载 → 转码 MP3 320k
+EXT -->> FE : WebSocket 实时进度 0~100%
+EXT --> M : 音频 + 封面
+
+== 入库与回填 ==
+M -> DB : 入库（状态=待审核）+ 落盘 music/ image/
+M -> DB : 指纹采集（听歌识曲用，失败不阻断）
+M -> DB : 求歌自动回填（reqid → resultSongId）
+
+== 后置任务 ==
+M -> M : 响度分析回写（ffmpeg ebur128）
+M -> M : 歌词获取回写（三级降级，另见活动图）
+
+== 取消（任意时刻） ==
+U -> FE : 任务浮窗点「×」
+FE -> M : 取消任务
+M -> EXT : destroyForcibly 强杀进程
+@enduml

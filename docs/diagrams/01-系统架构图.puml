@@ -1,0 +1,85 @@
+@startuml 01-系统架构图
+' =====================================================================
+' 悦享音乐 MusicDreamer 系统架构图（成员A主责模块以蓝色高亮）
+' 贴入 CodeArts Snap / 任意 PlantUML 渲染器即可生成图片
+' =====================================================================
+skinparam defaultTextAlignment center
+skinparam componentStyle rectangle
+skinparam roundCorner 6
+skinparam ArrowColor #555555
+skinparam legendBackgroundColor #FDFDFD
+
+title 悦享音乐 MusicDreamer 系统架构图\n（1 网关 + 7 微服务 ｜ <back:#ADD8E6>蓝色为成员A主责：Mod_media / Mod_setting / Mod_upload 及对应前端</back>）
+
+package "客户端层" as client #FAFAFA {
+  [Web 前端\nVue3 + Element Plus + Pinia] as web #ADD8E6
+  [微信小程序] as mp
+}
+
+node "Gateway 网关 (8000)\n路由转发 · JWT 鉴权 · 身份头清洗防伪造" as gw
+
+cloud "Nacos 注册/配置中心" as nacos
+database "MySQL\nmedia_task 任务表(状态机)\nsong_request 求歌表\nsong 表(待审/歌词指针/响度)" as mysql
+database "Redis\n缓存(故障降级\n不阻断主链路)" as redis
+
+package "微服务层 (Spring Boot · OpenFeign)" as services {
+  [Mod_media 媒体服务 (8010)\n任务引擎 · 下载管线 · 歌词链路\n响度分析 · 指纹采集 · 求歌管理\n工具管理 · WS 进度推送] as media #ADD8E6
+  [Mod_setting\n设置中心 (8005)\n代理/cookies/\nwhisper 模型/响度目标] as setting #ADD8E6
+  [Mod_upload\n上传服务 (8007)\naudio/image/lyric\n上传 + 静态资源] as upload #ADD8E6
+  [Mod_login\n(8001)\n注册/登录/JWT] as login
+  [Mod_music\n(8002)\n歌曲 CRUD · 审核流] as music
+  [Mod_songList\n(8008)\n歌单] as songlist
+  [Mod_like\n(8009)\n收藏/点赞] as like
+}
+
+package "Mod_media 外部依赖 (ProcessExecutor 统一出口)" as externals #FFF7E6 {
+  [yt-dlp\n(下载/字幕/元数据)] as ytdlp
+  [ffmpeg\n(转码/响度/预处理)] as ffmpeg
+  [whisper.cpp\n(本地 AI 转写)] as whisper
+  [LRCLIB 在线词库\n(HTTP)] as lrclib
+  [B站 / YouTube\n视频源] as sites
+  [ACRCloud 云识别\n(本地未命中降级)] as acr
+}
+
+package "存储卷 (自动落盘)" as storage #F0FFF0 {
+  [music/ 音频] as d_music
+  [lyric/ 歌词 .lrc] as d_lyric
+  [image/ 封面] as d_image
+  [models/ whisper 模型] as d_models
+}
+
+web -down-> gw
+mp -down-> gw
+gw -down-> media
+gw -down-> setting
+gw -down-> upload
+gw --> login
+gw --> music
+gw --> songlist
+gw --> like
+
+services ..> nacos : 注册/发现·配置
+media --> mysql : 任务状态机·求歌回填
+media --> redis
+music --> mysql
+
+media --> ytdlp : 数组参数防注入\n超时 destroyForcibly
+media --> ffmpeg
+media --> whisper
+media --> lrclib : 歌词三级降级第1级
+media --> sites : 下载/CC 字幕
+media --> acr
+ytdlp ..> sites
+media --> d_music : 入库落位(撞名-songId)
+media --> d_lyric
+media --> d_image
+media --> d_models
+
+media .up.> web : WebSocket\nws:///ws/task/{id}\n实时进度/取消
+
+legend right
+  成员A闭环：求歌 → 粘贴链接 → 任务队列
+  → yt-dlp/ffmpeg 下载转码 → 自动落盘 → 入库(待审)
+  → 歌词获取回写 → 指纹采集 → 求歌自动回填
+endlegend
+@enduml

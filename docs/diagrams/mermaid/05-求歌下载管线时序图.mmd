@@ -1,0 +1,32 @@
+sequenceDiagram
+    autonumber
+    actor U as 用户 / 管理员
+    participant FE as 前端：导入页 / 求歌 / 任务浮窗
+    participant M as Mod_media：任务引擎 + 下载管线
+    participant EXT as 外部进程：yt-dlp / ffmpeg
+    participant DB as Mod_music：歌曲库 + 求歌表
+
+    note over U,DB : 求歌 → 下载转码 → 入库待审 → 指纹 → 求歌回填 → 后置回写
+
+    note over U,M : 求歌与导入
+    U->>FE : 提交求歌 / 粘贴链接导入
+    FE->>M : 创建下载任务（求歌下载带 reqid 标记）
+
+    note over M,EXT : 下载管线
+    M->>EXT : 元数据 → 下载 → 转码 MP3 320k
+    EXT-->>FE : WebSocket 实时进度 0~100%
+    EXT-->>M : 音频 + 封面
+
+    note over M,DB : 入库与回填
+    M->>DB : 入库（状态=待审核）+ 落盘 music/ image/
+    M->>DB : 指纹采集（听歌识曲用，失败不阻断）
+    M->>DB : 求歌自动回填（reqid → resultSongId）
+
+    note over M : 后置任务
+    M->>M : 响度分析回写（ffmpeg ebur128）
+    M->>M : 歌词获取回写（三级降级，另见活动图）
+
+    note over U,EXT : 取消（任意时刻）
+    U->>FE : 任务浮窗点「×」
+    FE->>M : 取消任务
+    M->>EXT : destroyForcibly 强杀进程

@@ -1,0 +1,79 @@
+@startuml 03-系统用例图
+' =====================================================================
+' 成员A范围系统用例图：内容 intake 闭环（求歌/导入/任务/歌词/响度/设置/工具）
+' 贴入 CodeArts Snap / 任意 PlantUML 渲染器即可生成图片
+' =====================================================================
+left to right direction
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #FDFDFD
+  BorderColor #666666
+}
+skinparam actorStyle awesome
+
+title 悦享音乐 · 系统用例图（成员A：内容是怎么进来的）\n虚线 <<extend>> 为可选扩展，实线箭头 <<include>> 为必含子流程
+
+actor "普通用户" as User
+actor "管理员" as Admin
+Admin --|> User
+
+actor "LRCLIB 词库" as LrcLib
+actor "whisper.cpp" as Whisper
+actor "B站 / YouTube" as Sites
+actor "ffmpeg" as Ffmpeg
+
+rectangle "悦享音乐系统（成员A负责范围）" {
+  (提交求歌) as UC01
+  (查看我的求歌\n（处理结果标「新」）) as UC02
+  (粘贴链接导入歌曲) as UC03
+  (解析预览\n歌名智能裁剪/时长) as UC04
+  (查看任务进度\n（任务浮窗）) as UC05
+  (取消任务) as UC06
+  (审核歌曲（待审→上架）) as UC07
+  (求歌处理) as UC08
+  (发起下载（带 reqid 标记）) as UC09
+  (拒绝求歌) as UC10
+  (手动回填求歌) as UC11
+  (系统设置\n代理/cookies/模型/响度目标) as UC12
+  (工具与模型管理) as UC13
+  (下载转码管线\nyt-dlp→ffmpeg→落盘) as UC14
+  (入库待审) as UC15
+  (指纹采集入库) as UC16
+  (求歌自动回填) as UC17
+  (歌词获取三级降级\n词库→字幕→AI转写) as UC18
+  (时间轴校准\nLyricAligner) as UC19
+  (响度分析与回写) as UC20
+  (WebSocket 进度推送) as UC21
+}
+
+User --> UC01
+User --> UC02
+User --> UC03
+User --> UC05
+User --> UC06
+
+Admin --> UC07
+Admin --> UC08
+Admin --> UC12
+Admin --> UC13
+
+UC03 ..> UC04 : <<extend>>\n提交前预览
+UC03 ..> UC18 : <<extend>>\n勾选“自动获取歌词”
+UC09 .> UC03 : <<include>>
+UC08 --> UC09
+UC08 --> UC10
+UC08 --> UC11
+
+UC03 .> UC14 : <<include>>
+UC09 .> UC17 : <<include>>\n入库成功自动回填
+UC14 .> UC15 : <<include>>
+UC14 .> UC16 : <<include>>
+UC14 .> UC20 : <<include>>\n响度必做
+UC18 .> UC19 : <<extend>>\n命中在线同步歌词时
+UC05 .> UC21 : <<include>>
+
+UC14 --> Sites : 下载音频/字幕
+UC18 --> LrcLib : 在线匹配
+UC18 --> Whisper : 本地转写/校准
+UC20 --> Ffmpeg : ebur128 响度测量
+@enduml
